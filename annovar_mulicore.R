@@ -16,6 +16,10 @@ core <- 7
 system("bgzip NABEC_EXOME_cohort_control.vcf");system("bgzip coriell_pd_exomes_case.vcf")
 system("tabix -p vcf NABEC_EXOME_cohort_control.vcf.gz");system("tabix -p vcf coriell_pd_exomes_case.vcf.gz")
 system("vcf-merge --remove-duplicates NABEC_EXOME_cohort_control.vcf.gz coriell_pd_exomes_case.vcf.gz | bgzip -c > merge_row.vcf.gz")
+test <- read.vcfR(file = "merge_row.vcf.gz", convertNA = T, checkFile = F)
+test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
+test_fix <- test$fix;rm(test)
+fwrite(x = test_fix, file = "vcf_bind_0930_row_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
 
 #### vcf QC -- KGGSeq
 system("java -Xmx10g -jar /home/lee/kggseq10hg19/kggseq.jar --vcf-file /home/jinoo/skat-o/0914_skatT_duplicate.vcf.gz --ped-file /home/jinoo/skat-o/skato_0918.ped --out 0928_skatQC --o-vcf --gty-qual 20 --gty-dp 8 --gty-sec-pl 20 --vcf-filter-in PASS --seq-qual 50 --seq-mg 20 --seq-fs 60 --hwe-control 1E-5 --nt 7")
@@ -58,8 +62,8 @@ system.time(
   }
 );gc() ##7000_ 3div
 
-vcf_1 <- read.vcfR(file = "vcf1.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F, limit = 1e+06)
-su vcf_2 <- read.vcfR(file = "vcf2.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
+vcf_1 <- read.vcfR(file = "vcf1.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
+vcf_2 <- read.vcfR(file = "vcf2.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
 vcf_3 <- read.vcfR(file = "vcf3.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
 vcf_4 <- read.vcfR(file = "vcf4.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
 vcf_5 <- read.vcfR(file = "vcf5.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
