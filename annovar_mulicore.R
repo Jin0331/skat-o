@@ -10,9 +10,11 @@ library(dplyr)
 ################################# row data #################################
 ### vcf-merge
 ## before vcftool using
-system("bgzip /home/skat-0/row_data/NABEC_EXOME_cohort_control.vcf");system("bgzip /home/skat-0/row_data/coriell_pd_exomes_case.vcf")
-system("tabix -p vcf /home/skat-0/row_data/NABEC_EXOME_cohort_control.vcf.gz");system("tabix -p vcf /home/skat-0/row_data/coriell_pd_exomes_case.vcf.gz")
-system("vcf-merge --remove-duplicates /home/skat-0/row_data/NABEC_EXOME_cohort_control.vcf.gz /home/skat-0/row_data/coriell_pd_exomes_case.vcf.gz | bgzip -c > /home/skat-0/row_data/merge_row.vcf.gz")
+system("sed -i 's/chr//g' /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf");system("sed -i 's/chr//g' /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf")
+system("bgzip /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf");system("bgzip /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf")
+system("tabix -p vcf /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf.gz");system("tabix -p vcf /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf.gz")
+system("vcf-merge --remove-duplicates /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf.gz /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf.gz | bgzip -c > /home/jinoo/skat-o/row_data/merge_row.vcf.gz")
+
 test <- read.vcfR(file = "merge_row.vcf.gz", convertNA = T, checkFile = F)
 test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
 test_fix <- test$fix;rm(test)
@@ -21,15 +23,14 @@ fwrite(x = test_fix, file = "/home/skat-0/row_data/vcf_bind_0930_row_fix.txt", q
 
 
 
-core <- 7
 #### directory make
 setwd("~/skat-o/")
-date <- "0928"; date <- paste0(date, "_test") ######## date set, input !!!!!!!
+date <- "1001"; date <- paste0(date, "_test") ######## date set, input !!!!!!!
 system(glue("mkdir {test_date}",test_date = date)) 
 setwd(paste0(getwd(), "/",date))
 
 #### vcf QC -- KGGSeq
-system("java -Xmx10g -jar /home/lee/kggseq10hg19/kggseq.jar --vcf-file /home/skat-0/row_data/merge_row.vcf.gz --ped-file /home/jinoo/skat-o/skato_0918.ped --out skatQC_KGGSeq --o-vcf --gty-qual 20 --gty-dp 8 --gty-sec-pl 20 --vcf-filter-in PASS --seq-qual 50 --seq-mg 20 --seq-fs 60 --hwe-control 1E-5 --nt 7")
+system("java -Xmx10g -jar /home/lee/kggseq10hg19/kggseq.jar --vcf-file /home/jinoo/skat-o/row_data/merge_row.vcf.gz --ped-file /home/jinoo/skat-o/skato_0918.ped --out skatQC_KGGSeq --o-vcf --gty-qual 20 --gty-dp 8 --gty-sec-pl 20 --vcf-filter-in PASS --seq-qual 50 --seq-mg 20 --seq-fs 60 --hwe-control 1E-5 --nt 7")
 system("gzip -d skatQC_KGGSeq.flt.vcf.gz") ## bgzip and tabix
 system("bgzip skatQC_KGGSeq.flt.vcf")
 system("tabix -p vcf skatQC_KGGSeq.flt.vcf.gz")
@@ -78,13 +79,8 @@ system.time(
   }
 );gc() ##7000_ 3div
 
-vcf_1 <- read.vcfR(file = "vcf1.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
-vcf_2 <- read.vcfR(file = "vcf2.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
-vcf_3 <- read.vcfR(file = "vcf3.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
-vcf_4 <- read.vcfR(file = "vcf4.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
-vcf_5 <- read.vcfR(file = "vcf5.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
-vcf_6 <- read.vcfR(file = "vcf6.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
-vcf_7 <- read.vcfR(file = "vcf7.vcf.hg19_multianno.vcf", convertNA = T, checkFile = F)
+temp <- list.files(pattern = "*hg19")
+mul_vcf <- mclapply(temp, read.vcfR, convertNA =T, checkFile = F, mc.cores = 2)
 
 vcf_bind1 <- rbind2(vcf_1,vcf_2);rm(vcf_1,vcf_2)
 vcf_bind2 <- rbind2(vcf_3,vcf_4);rm(vcf_3,vcf_4)
@@ -111,24 +107,20 @@ geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors 
 geneset <- as.character(geneset[,1])
 
 ## NULL dataframe
-variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, dbSNP147 = NA, REF = NA , ALT = NA, Gene.knownGene = NA, ExonicFunc.knownGene = NA, Gene.refGene = NA, ExonicFunc.refGene = NA, CADD13_PHRED=NA)[numeric(0), ]
+variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, dbSNP147 = NA, REF = NA , ALT = NA, Gene.knownGene = NA, ExonicFunc.knownGene = NA, CADD13_PHRED=NA)[numeric(0), ]
 
 ## Parkinson geneset variant
 # 1:17312586_G/A   grp format
 
 for(i in 1:length(geneset)){
-  variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((test_fix$Gene.refGene == geneset[i] & test_fix$Func.refGene == "exonic") |  (test_fix$Gene.knownGene == geneset[i] & test_fix$Func.knownGene == "exonic")), 
-                                                               select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","Gene.refGene","ExonicFunc.refGene", "CADD13_PHRED")), fill=T)
+  variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((test_fix$Gene.knownGene == geneset[i] & test_fix$Func.knownGene == "exonic")), 
+                                                               select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")), fill=T)
 }
 
 ### 1. nonsynonymous geneset
-nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.refGene == "nonsynonymous_SNV")|(variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV"))
-                        | ( variant_all_parkinson$ExonicFunc.refGene == "stopgain" | variant_all_parkinson$ExonicFunc.refGene ==  "stoploss" 
-                            | variant_all_parkinson$ExonicFunc.refGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.refGene ==  "frameshift_insertion"
-                            | variant_all_parkinson$ExonicFunc.refGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.refGene ==  "splicing" 
-                            | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
+nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
                             | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
-                            | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing"))
+                            | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing")
 
 i <- NULL;nonsynonymous_geneset <- c()
 for(i in 1:nrow(nonsynonymous)){
@@ -136,17 +128,14 @@ for(i in 1:nrow(nonsynonymous)){
 }
 
 ### 2. CADD > 12.37 variant
-cadd <- subset(variant_all_parkinson, subset = ( ((variant_all_parkinson$ExonicFunc.refGene == "nonsynonymous_SNV")|(variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) & variant_all_parkinson$CADD13_PHRED > 12.37))
+cadd <- subset(variant_all_parkinson, subset = ( ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) & variant_all_parkinson$CADD13_PHRED > 12.37))
 i <- NULL;cadd_geneset <- c()
 for(i in 1:nrow(cadd)){
   cadd_geneset <- c(cadd_geneset, paste0(cadd[i,1], ":", cadd[i,2], "_", cadd[i,5], "/", cadd[i,6]))
 }
 
 ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
-lof <- subset(variant_all_parkinson, subset = ( variant_all_parkinson$ExonicFunc.refGene == "stopgain" | variant_all_parkinson$ExonicFunc.refGene ==  "stoploss" 
-                                      | variant_all_parkinson$ExonicFunc.refGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.refGene ==  "frameshift_insertion"
-                                      | variant_all_parkinson$ExonicFunc.refGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.refGene ==  "splicing" 
-                                      | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
+lof <- subset(variant_all_parkinson, subset = ( variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
                                       | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
                                       | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing"))
 i <- NULL;lof_geneset <- c()
@@ -169,14 +158,11 @@ paste_temp <- NULL
 temp <- NULL
 for( i in 1:length(variant_all_parkinson_gene)){
   paste_temp <- NULL
-  temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i]) | (Gene.refGene %in% variant_all_parkinson_gene[i])))
-  temp <- subset(temp, subset = ((temp$ExonicFunc.refGene == "nonsynonymous_SNV")|(temp$ExonicFunc.knownGene == "nonsynonymous_SNV"))
-         | ( temp$ExonicFunc.refGene == "stopgain" | temp$ExonicFunc.refGene ==  "stoploss" 
-             | temp$ExonicFunc.refGene ==  "frameshift_deletion" | temp$ExonicFunc.refGene ==  "frameshift_insertion"
-             | temp$ExonicFunc.refGene ==  "frameshift_block_substitution" | temp$ExonicFunc.refGene ==  "splicing" 
-             | temp$ExonicFunc.knownGene == "stopgain" | temp$ExonicFunc.knownGene ==  "stoploss" 
-             | temp$ExonicFunc.knownGene ==  "frameshift_deletion" | temp$ExonicFunc.knownGene ==  "frameshift_insertion" 
-             | temp$ExonicFunc.knownGene ==  "frameshift_block_substitution" | temp$ExonicFunc.knownGene ==  "splicing"))
+  temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i])))
+  temp <- subset(temp, subset = ((temp$ExonicFunc.knownGene == "nonsynonymous_SNV"))| temp$ExonicFunc.knownGene == "stopgain"
+             | temp$ExonicFunc.knownGene ==  "stoploss" | temp$ExonicFunc.knownGene ==  "frameshift_deletion"
+             | temp$ExonicFunc.knownGene ==  "frameshift_insertion" | temp$ExonicFunc.knownGene ==  "frameshift_block_substitution"
+             | temp$ExonicFunc.knownGene ==  "splicing")
   if(nrow(temp) != 0){
   for(j in 1:nrow(temp)){
     paste_temp <- c(paste_temp, paste0(temp[j,1], ":", temp[j,2],"_", temp[j,5],"/",temp[j,6]))
