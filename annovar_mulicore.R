@@ -177,13 +177,13 @@ for( i in 1:length(variant_all_parkinson_gene)){
 
 ### skat-ot test
 system("pwd")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928_80.vcf.gz -groupf skat_grp.grp  -out test_1004_maf005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928_80.vcf.gz -groupf skat_grp.grp  -out test_1004_maf003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928_80.vcf.gz -groupf skat_grp.grp  -out test_1004_maf001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf skat_grp.grp  -out test_1004_maf005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf skat_grp.grp  -out test_1004_maf003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf skat_grp.grp  -out test_1004_maf001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928_80.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928_80.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928_80.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
 
 
 ### result_adjusted_p value
