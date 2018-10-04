@@ -49,7 +49,7 @@ fwrite(x = test_fix, file = "skatQC_allele_individual_flt_vcftools.txt", quote =
 
 
 ## row merge & recode vcf load(7 div)
-temp <- fread(input = "QC_80_allele_individual_vcftools_flt.recode.vcf", sep = "\t", quote = "\n", skip = 210, header = T, nThread = 14)
+temp <- cfread(input = "QC_80_allele_individual_vcftools_flt.recode.vcf", sep = "\t", quote = "\n", skip = 210, header = T, nThread = 14)
 temp_tidy <- dplyr::tbl_df(temp);rm("temp")
 vcf_list <- list()
 vcf_list[1] <- list(temp_tidy[1:round(nrow(temp_tidy)/core),])
@@ -103,7 +103,8 @@ system("rm -rf ")
 
 ################### skat-o preprocessing #############################
 test_fix <- read.table(file = "annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
-geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
+#geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
+geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
 geneset <- as.character(geneset[,1])
 
 ## NULL dataframe
@@ -114,7 +115,7 @@ variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, dbSNP147 = NA
 
 for(i in 1:length(geneset)){
   variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((test_fix$Gene.knownGene == geneset[i] & test_fix$Func.knownGene == "exonic")), 
-                                                               select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")), fill=T)
+                                                               select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))
 }
 
 ### 1. nonsynonymous geneset
@@ -176,13 +177,13 @@ for( i in 1:length(variant_all_parkinson_gene)){
 
 ### skat-ot test
 system("pwd")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf skat_grp.grp  -out test_0928_maf005.skat -ped /home/jinoo/skat-o/skato_0918.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf skat_grp.grp  -out test_0928_maf003.skat -ped /home/jinoo/skat-o/skato_0918.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf skat_grp.grp  -out test_0928_maf001.skat -ped /home/jinoo/skat-o/skato_0918.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928.vcf.gz -groupf skat_grp.grp  -out test_1004_maf005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928.vcf.gz -groupf skat_grp.grp  -out test_1004_maf003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928.vcf.gz -groupf skat_grp.grp  -out test_1004_maf001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_0928_exonic_all_gene005.skat -ped /home/jinoo/skat-o/skato_0918.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_0928_exonic_all_gene003.skat -ped /home/jinoo/skat-o/skato_0918.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_bind_0917_gz.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_0928_exonic_all_gene001.skat -ped /home/jinoo/skat-o/skato_0918.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
+system("/home/lee/epacts_0913/bin/epacts-group -vcf vcf_QC_0928.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp  -out test_1004_exonic_all_gene001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
 
 
 ### result_adjusted_p value
