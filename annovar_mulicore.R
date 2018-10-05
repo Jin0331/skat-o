@@ -21,6 +21,8 @@ test_fix <- test$fix;rm(test)
 fwrite(x = test_fix, file = "/home/skat-0/row_data/vcf_bind_0930_row_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
 ################################# row data #################################
 
+################################# vcf to plink #################################
+system("vcftools --vcf merge_row_bak.vcf --plink --out merge_row_plink")
 
 
 #### directory make
