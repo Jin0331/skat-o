@@ -13,17 +13,13 @@ library(dplyr)
 system("sed -i 's/chr//g' /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf");system("sed -i 's/chr//g' /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf")
 system("bgzip /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf");system("bgzip /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf")
 system("tabix -p vcf /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf.gz");system("tabix -p vcf /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf.gz")
-system("vcf-merge --remove-duplicates /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf.gz /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf.gz | bgzip -c > /home/jinoo/skat-o/row_data/merge_row.vcf.gz")
+system("vcf-merge -R 0/0 -d /home/jinoo/skat-o/row_data/NABEC_EXOME_cohort_control.vcf.gz /home/jinoo/skat-o/row_data/coriell_pd_exomes_case.vcf.gz | bgzip -c > /home/jinoo/skat-o/row_data/merge_ref_for_missing.vcf.gz")
 
-test <- read.vcfR(file = "merge_row.vcf.gz", convertNA = T, checkFile = F)
+test <- read.vcfR(file = "merge_ref_for_missing.vcf.gz", convertNA = T, checkFile = T)
 test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
 test_fix <- test$fix;rm(test)
-fwrite(x = test_fix, file = "/home/skat-0/row_data/vcf_bind_0930_row_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
+fwrite(x = test_fix, file = "/home/jinoo/skat-o/row_data/merge_ref_for_missing_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
 ################################# row data #################################
-
-################################# vcf to plink #################################
-system("vcftools --vcf merge_row_bak.vcf --plink --out merge_row_plink")
-
 
 #### directory make
 setwd("~/skat-o/")
@@ -32,37 +28,79 @@ system(glue("mkdir {test_date}",test_date = date))
 setwd(paste0(getwd(), "/",date))
 
 #### vcf QC -- KGGSeq
-system("java -Xmx10g -jar /home/lee/kggseq10hg19/kggseq.jar --vcf-file /home/jinoo/skat-o/row_data/merge_row.vcf.gz --ped-file /home/jinoo/skat-o/skato_0918.ped --out skatQC_KGGSeq --o-vcf --gty-qual 20 --gty-dp 8 --gty-sec-pl 20 --vcf-filter-in PASS --seq-qual 50 --seq-mg 20 --seq-fs 60 --hwe-control 1E-5 --nt 7")
+system("java -Xmx10g -jar /home/lee/kggseq10hg19/kggseq.jar --vcf-file /home/jinoo/skat-o/row_data/merge_ref_for_missing.vcf.gz --ped-file /home/jinoo/skat-o/skato_0918.ped --out skatQC_KGGSeq --o-vcf --gty-qual 20 --gty-dp 8 --gty-sec-pl 20 --vcf-filter-in PASS --seq-qual 50 --seq-mg 20 --seq-fs 60 --hwe-control 1E-5 --nt 7")
 system("gzip -d skatQC_KGGSeq.flt.vcf.gz") ## bgzip and tabix
 system("bgzip skatQC_KGGSeq.flt.vcf")
 system("tabix -p vcf skatQC_KGGSeq.flt.vcf.gz")
 test <- read.vcfR(file = "skatQC_KGGSeq.flt.vcf.gz", convertNA = T, checkFile = F)
 test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
 test_fix <- test$fix;rm(test)
-fwrite(x = test_fix, file = "skatQC_KGGSeq_GVQC.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
-rm(test_fix)
+fwrite(x = test_fix, file = "skatQC_KGGSeq_GVQC_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
 
+################################# vcf to plink, ajk #################################
+system("mkdir plink")
+system("vcftools --gzvcf skatQC_KGGSeq.flt.vcf.gz --plink --out plink/skatQC_KGGSeq.flt_plink")
+system("vcftools --gzvcf skatQC_KGGSeq.flt.vcf.gz --relatedness --out plink/relatedness_ajk");setwd("/plink") ## ajk
+system("/home/lee/tool/plink --file skatQC_KGGSeq.flt_plink --make-bed --out skatQC");system("cp /home/jinoo/skat-o/skato_0918_epacts.ped skatQC.fam")
+system("/home/lee/tool/plink --bfile skatQC --het --out skatQC_het") ### heterogygosity
+
+system("/home/lee/tool/plink --bfile skatQC --indep-pairwise 50 5 0.2 --out skat_pruning")
+system("/home/lee/tool/plink --bfile skatQC --genome full --out skatQC_IBD") ### MDS
+system("/home/lee/tool/plink --bfile skatQC --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out skatQC_MDS")
+system("/home/lee/tool/plink --bfile skatQC --missing --out skatQC_missing") ### individual missing
+
+#1 heterozygosity
+plink_het <- read.table(file = "skatQC_het.het",header = T, stringsAsFactors = F)
+F_mean_4SD <- mean(plink_het$F) - (sd(plink_het$F)*4)
+removal_het <- subset(plink_het, subset = (plink_het$F < F_mean_4SD), select = "IID")[,1] ### het removal check)
+
+#2 population outliers
+plink_MDS <- read.table(file = "skatQC_MDS.mds", header = T, stringsAsFactors = F)
+col_mean <- apply(plink_MDS[,4:23], 2, mean)
+col_sd <- apply(plink_MDS[,4:23], 2, sd)
+removal_MDS <- NULL
+for(i in 1:nrow(plink_MDS)){
+  for( j in 4:23){ 
+    if( plink_MDS[i,j] > (col_mean[j-3] + 4*col_sd[j-3]) | plink_MDS[i,j] < (col_mean[j-3] - 4*col_sd[j-3]) )
+      removal_MDS <- c(removal_MDS, plink_MDS[i,1])
+  }
+}
+#3 Ajk value
+
+ajk_value <- read.table(file = "relatedness_ajk.relatedness", header = T, stringsAsFactors = F)
+removal_ajk <- subset(ajk_value, subset = ( RELATEDNESS_AJK > 0.15 & RELATEDNESS_AJK < 0.9),select = "INDV1")[,1]
+
+#4 missing
+plink_missing <- read.table(file = "skatQC_missing.imiss", header = T, stringsAsFactors = F)
+removal_imissing <- subset(plink_missing, subset = (F_MISS > 0.15), select = c("IID","F_MISS"))[,1]
+
+# merge & write
+removal_iid <- unique(c(removal_MDS,removal_ajk,removal_het,removal_imissing))
+write.table(x = removal_iid, file = "../plink_ind.txt",sep = "\n", quote = F, row.names = F, col.names = F)
+rm(list=ls());gc()
 #### vcf QC -- vcftools
-system("vcftools --gzvcf skatQC_KGGSeq.flt.vcf.gz --min-alleles 2 --max-alleles 2 --max-missing 0.8 --recode --out QC_80_allele_individual_vcftools_flt")
-test <- read.vcfR(file = "QC_80_allele_individual_vcftools_flt", convertNA = T, checkFile = F)
+setwd("../")
+system("vcftools --gzvcf skatQC_KGGSeq.flt.vcf.gz --min-alleles 2 --max-alleles 2 --remove plink_ind.txt --recode --out skatQC_vcftools.flt")
+test <- read.vcfR(file = "skatQC_vcftools.flt.vcf", convertNA = T, checkFile = F)
 test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
 test_fix <- test$fix;rm(test)
-fwrite(x = test_fix, file = "skatQC_allele_individual_flt_vcftools.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
+fwrite(x = test_fix, file = "skatQC_vcftools.flt.vcf.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
 
 
 ## row merge & recode vcf load(7 div)
-temp <- cfread(input = "QC_80_allele_individual_vcftools_flt.recode.vcf", sep = "\t", quote = "\n", skip = 210, header = T, nThread = 14)
+core <- 7
+temp <- fread(input = "skatQC_vcftools.flt.vcf", sep = "\t", quote = "\n", skip = 210, header = T, nThread = 14)
 temp_tidy <- dplyr::tbl_df(temp);rm("temp")
 vcf_list <- list()
 vcf_list[1] <- list(temp_tidy[1:round(nrow(temp_tidy)/core),])
 for(i in 2:(core)){
   if(i == core){
-    vcf_list[i] <- list(temp_tidy[((nrow(vcf1)*(i-1))+1):(nrow(temp_tidy)),])
+    vcf_list[i] <- list(temp_tidy[((nrow(vcf_list[[1]])*(i-1))+1):(nrow(temp_tidy)),])
     break;
   }
-  vcf_list[i] <- list(temp_tidy[((nrow(vcf1)*(i-1))+1):(nrow(vcf1)*i),])
+  vcf_list[i] <- list(temp_tidy[((nrow(vcf_list[[1]])*(i-1))+1):(nrow(vcf_list[[1]])*i),])
 }
-rm(temp_tidy);rm(vcf1)
+rm(temp_tidy)
 
 ## for annotation, vcf out
 system("mkdir vcf");setwd("vcf/")
@@ -198,3 +236,9 @@ for(i in 1:length(file)){
   temp <- cbind(temp, PVALUE_ADJUSTED)
   write.table(x = temp, file = file[i], col.names = T, row.names = F, quote = F, sep = "\t")
 }
+
+
+# pheno <- c(rep("control", 343),rep("case",618))
+# plink_MDS <- cbind(plink_MDS, pheno)
+# plot(plink_MDS$C1, plink_MDS$C2, col =as.factor(plink_MDS$pheno), xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.02))
+# legend("bottomleft", legend=levels(as.factor(plink_MDS$pheno)), pch="o", col = 1:nlevels(as.factor(plink_MDS$pheno)))
