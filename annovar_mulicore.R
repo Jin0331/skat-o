@@ -154,8 +154,8 @@ system("tabix -p vcf skatQC_vcftools.flt.vcf.gz")
 
 ################### skat-o preprocessing #############################
 test_fix <- read.table(file = "annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
-geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
-# geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
+# geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
+geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
 geneset <- as.character(geneset[,1])
 
 ## NULL dataframe
@@ -182,7 +182,9 @@ for(i in 1:length(geneset)){
   gene_to_variant <- rbind(gene_to_variant, data_temp)
 }
 
-
+View(gene_to_variant)
+write.table(gene_to_variant, file = "gene-variant_count_parkinson.txt", quote = F, sep = "\t")
+write.table(gene_to_variant, file = "gene-variant_count_lsd.txt", quote = F, sep = "\t")
 ### 1. nonsynonymous geneset
 nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
                             | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
