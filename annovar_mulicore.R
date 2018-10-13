@@ -153,6 +153,8 @@ system("tabix -p vcf skatQC_vcftools.flt.vcf.gz")
 
 
 ################### skat-o preprocessing #############################
+######################################################################
+setwd("/home/jinoo/skat-o/1001_test/")
 test_fix <- read.table(file = "annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
 # geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
 geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
@@ -184,7 +186,7 @@ for(i in 1:length(geneset)){
 
 View(gene_to_variant)
 write.table(gene_to_variant, file = "gene-variant_count_parkinson.txt", quote = F, sep = "\t")
-write.table(gene_to_variant, file = "gene-variant_count_lsd.txt", quote = F, sep = "\t")
+# write.table(gene_to_variant, file = "gene-variant_count_lsd.txt", quote = F, sep = "\t")
 ### 1. nonsynonymous geneset
 nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
                             | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
@@ -228,7 +230,7 @@ temp <- NULL
 system("rm -rf variant_all_parkinson_gene_geneset_gene.grp")
 for( i in 1:length(variant_all_parkinson_gene)){
   paste_temp <- NULL
-  temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i])))
+  temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i])) & CADD13_PHRED > 12.37)
   temp <- subset(temp, subset = ((temp$ExonicFunc.knownGene == "nonsynonymous_SNV"))| temp$ExonicFunc.knownGene == "stopgain"
              | temp$ExonicFunc.knownGene ==  "stoploss" | temp$ExonicFunc.knownGene ==  "frameshift_deletion"
              | temp$ExonicFunc.knownGene ==  "frameshift_insertion" | temp$ExonicFunc.knownGene ==  "frameshift_block_substitution"
@@ -247,17 +249,17 @@ for( i in 1:length(variant_all_parkinson_gene)){
 ### skat-ot test
 system("mkdir result");setwd("result")
 system("pwd")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/skat_grp.grp  -out test_1011_maf005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/skat_grp.grp  -out test_1011_maf003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-system("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/skat_grp.grp  -out test_1011_maf001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/variant_all_parkinson_gene_geneset_gene.grp  -out test_1011_exonic_all_gene005_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.05 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/variant_all_parkinson_gene_geneset_gene.grp  -out test_1011_exonic_all_gene003_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.03 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2") 
-system("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/variant_all_parkinson_gene_geneset_gene.grp  -out test_1011_exonic_all_gene001_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf 0.01 -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2")
-
+MAF <- c(0.01, 0.03, 0.05)
+for(i in MAF){
+  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/skat_grp.grp -out test_1011_maf{maf}_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/variant_all_parkinson_gene_geneset_gene.grp -out test_1011_maf{maf}_LSD_gene.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+}
 
 ### result_adjusted_p value
+system("find . ! -name '*.epacts' -delete")
 file <- list.files(pattern = "test*")
+
 for(i in 1:length(file)){
   temp <- read.table(file = file[i], header = F)
   system(glue("rm -rf {remove}", remove = file[i]))
@@ -267,7 +269,7 @@ for(i in 1:length(file)){
   write.table(x = temp, file = file[i], col.names = T, row.names = F, quote = F, sep = "\t")
 }
 
-
+# mds plot
 # pheno <- c(rep("control", 343),rep("case",618))
 # plink_MDS <- cbind(plink_MDS, pheno)
 # plot(plink_MDS$C1, plink_MDS$C2, col =as.factor(plink_MDS$pheno), xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.02))
