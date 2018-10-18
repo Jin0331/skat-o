@@ -70,23 +70,21 @@ plink_missing <- read.table(file = "ppmiQC_missing.imiss", header = T, stringsAs
 removal_imissing <- subset(plink_missing, subset = (F_MISS > 0.15), select = c("IID","F_MISS"))[,1]
 
 #5 PPMI_condition
-setwd("/home/jinoo/skat-o/ppmi_re_test/")
-PPMI_phenotype <- read.csv(file = "Demographics.csv", header = T, fill = NA, stringsAsFactors = F)
-PPMI_fam <- read.table(file = "ppmiQC.fam", header = F, stringsAsFactors = F)[,1]
+PPMI_phenotype <- read.csv(file = "../Demographics.csv", header = T, fill = NA, stringsAsFactors = F)
+PPMI_fam <- read.table(file = "../ppmiQC.fam", header = F, stringsAsFactors = F)[,1]
 
 sampleID <- NULL
 for(i in 1:length(PPMI_fam)){
   sampleID <- c(sampleID, str_split(string = PPMI_fam[i], pattern = "_", simplify = T)[3])  
 }
 PPMI_sample <- subset.data.frame(x = PPMI_phenotype, subset = (SUBJ_ID %in% sampleID))
-PPMI_sample_removal <- subset.data.frame(x = PPMI_sample, subset = (PPMI_sample$Ethnicity != "Not Hispanic or Latino" | PPMI_sample$Race != "White"
+PPMI_sample_removal <- paste0("PPMI_SI_",subset.data.frame(x = PPMI_sample, subset = (PPMI_sample$Ethnicity != "Not Hispanic or Latino" | PPMI_sample$Race != "White"
                                                                     | PPMI_sample$Appropriate.Diagnosis..APPRDX. == "SWEDD" 
                                                                     | PPMI_sample$Current.Appropriate.Diagnosis..CURRENT_APPRDX.== "SWEDD"
-                                                                    | PPMI_sample$Race.Not.Specified..RANOS. == "Yes"))
-
+                                                                    | PPMI_sample$Race.Not.Specified..RANOS. == "Yes"))[,2])
 
 # plink value merge & write
-removal_iid <- unique(c(removal_MDS,removal_ajk,removal_het,removal_imissing))
+removal_iid <- unique(c(removal_MDS,removal_ajk,removal_het,removal_imissing, PPMI_sample_removal))
 write.table(x = removal_iid, file = "../plink_ind.txt",sep = "\n", quote = F, row.names = F, col.names = F)
 rm(list=ls());gc()
 
@@ -152,9 +150,9 @@ system.time(
     system(glue("/home/lee/annovar/table_annovar.pl {path[i]} /home/lee/annovar/humandb/ -buildver hg19 -out {path[i]} -remove -protocol knownGene,avsnp147,cadd13gt10 -operation g,f,f -nastring . -vcfinput"))
   }
 );gc() ##7000_ 3div
-system("rm -rf *.txt");system("rm -rf *.avinput")
-temp <- list.files(pattern = "*hg19")
+system("find . ! -name '*multianno.vcf' -delete")
 
+temp <- list.files()
 mul_vcf <- mclapply(temp, read.vcfR, convertNA =T, checkFile = F, mc.cores = 2)
 
 vcf_bind1 <- rbind2(mul_vcf[[1]],mul_vcf[[2]])
@@ -170,17 +168,15 @@ test_fix <- test$fix;rm(test)
 fwrite(x = test_fix, file = "annotation_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n") ## fix out
 write.vcf(x = vcf_bind_complete, file = "skatQC_annotation.vcf.gz",APPEND = F);rm(vcf_bind_complete) ## vcf out
 
+system("gzip -d skatQC_annotation.vcf.gz") ## bgzip and tabix
 system("bgzip skatQC_annotation.vcf")
 system("tabix -p vcf skatQC_annotation.vcf.gz")
-# system("gzip -d skatQC_annotation.vcf.gz") ## bgzip and tabix
-# system("bgzip skatQC_annotation.vcf")
-# system("tabix -p vcf skatQC_annotation.vcf.gz")
 
 
 
 ################### skat-o preprocessing #############################
 ######################################################################
-setwd("/home/jinoo/skat-o/ppmi_test/")
+setwd("/home/jinoo/skat-o/ppmi_re_test/")
 test_fix <- read.table(file = "annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
 # geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
 geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
@@ -277,13 +273,13 @@ system("pwd")
 
 MAF <- c(0.01, 0.03, 0.05)
 for(i in MAF){
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_test/skat_grp.grp -out test_1011_maf{maf}_LSD.skat -ped /home/jinoo/skat-o/ppmi_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_test/variant_all_parkinson_gene_geneset_gene.grp -out test_1011_maf{maf}_LSD_gene.skat -ped /home/jinoo/skat-o/ppmi_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_re_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_re_test/skat_grp.grp -out test_1017_maf{maf}_LSD.skat -ped /home/jinoo/skat-o/ppmi_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_re_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_re_test/variant_all_parkinson_gene_geneset_gene.grp -out test_1017_maf{maf}_LSD_gene.skat -ped /home/jinoo/skat-o/ppmi_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
 }
 
 ### result_adjusted_p value
 system("find . ! -name '*.epacts' -delete")
-file <- list.files(pattern = "test*")
+file <- list.files()
 
 for(i in 1:length(file)){
   temp <- read.table(file = file[i], header = F)
