@@ -5,6 +5,7 @@ install.packages("foreach")
 install.packages("doMC")
 install.packages("dplyr")
 install.packages("stringr")
+install.packages("xlsx")
 
 library(glue);library(vcfR);library(data.table);library(foreach);library(doMC)
 library(dplyr);library(stringr)
@@ -197,122 +198,126 @@ system("tabix -p vcf skatQC_annotation.vcf.gz")
 ################### skat-o preprocessing #############################
 ######################################################################
 rm(list=ls())
-setwd("/home/jinoo/skat-o/ppmi_re_test/")
+setwd("/home/jinoo/skat-o/IPDGC_800/")
 test_fix <- read.table(file = "annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
-geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
-# geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
-geneset <- as.character(geneset[,1])
-
-## NULL dataframe
-variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, dbSNP147 = NA, REF = NA , ALT = NA, Gene.knownGene = NA, ExonicFunc.knownGene = NA, CADD13_PHRED=NA)[numeric(0), ]
-
-## Parkinson geneset variant
-# 1:17312586_G/A   grp format
-
-for(i in 1:length(geneset)){
-  variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((test_fix$Gene.knownGene == geneset[i] & test_fix$Func.knownGene == "exonic")), 
-                                                               select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))
-}
-
-### for gene, variant number
-variant_num1 <- NULL;variant_num2 <- NULL;data_temp <- NULL; gene_to_variant <- NULL;
-gene_to_variant <- data.frame(Gene = NA, variant_count=NA)[numeric(0), ]
-for(i in 1:length(geneset)){
-  variant_num1 <- subset(variant_all_parkinson, subset = ( (Gene.knownGene == geneset[i]))) ### for geneset , all-variant
-  variant_num2 <- nrow(subset(variant_num1, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" | ExonicFunc.knownGene == "stopgain"
-                                                      | ExonicFunc.knownGene ==  "stoploss" | ExonicFunc.knownGene ==  "frameshift_deletion" 
-                                                      | ExonicFunc.knownGene ==  "frameshift_insertion" 
-                                                      | ExonicFunc.knownGene ==  "frameshift_block_substitution" | ExonicFunc.knownGene ==  "splicing")))
-  data_temp <- data.frame(Gene = geneset[i], variant_num2)
-  gene_to_variant <- rbind(gene_to_variant, data_temp)
-}
-
-write.table(gene_to_variant, file = "gene-variant_count_parkinson.txt", quote = F, sep = "\t")
-
-### 1. nonsynonymous geneset
-nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
-                        | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
-                        | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing")
-
-i <- NULL;nonsynonymous_geneset <- c()
-for(i in 1:nrow(nonsynonymous)){
-  nonsynonymous_geneset <- c(nonsynonymous_geneset, paste0(nonsynonymous[i,1], ":", nonsynonymous[i,2], "_", nonsynonymous[i,5], "/", nonsynonymous[i,6]))
-}
-
-### 2. CADD > 12.37 variant
-cadd <- subset(variant_all_parkinson, subset = ( ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) & variant_all_parkinson$CADD13_PHRED > 12.37))
-i <- NULL;cadd_geneset <- c()
-for(i in 1:nrow(cadd)){
-  cadd_geneset <- c(cadd_geneset, paste0(cadd[i,1], ":", cadd[i,2], "_", cadd[i,5], "/", cadd[i,6]))
-}
-
-### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
-lof <- subset(variant_all_parkinson, subset = ( variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
-                                                | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
-                                                | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing") & variant_all_parkinson$CADD13_PHRED > 12.37)
-i <- NULL;lof_geneset <- c()
-for(i in 1:nrow(lof)){
-  lof_geneset <- c(lof_geneset, paste0(lof[i,1], ":", lof[i,2], "_", lof[i,5], "/", lof[i,6]))
-}
-
-nonsynonymous_geneset <- t(data.frame(nonsynonymous_geneset, stringsAsFactors = F));rownames(nonsynonymous_geneset) <- "nonsynonymous"
-cadd_geneset <- t(data.frame(cadd_geneset, stringsAsFactors = F));rownames(cadd_geneset) <- "cadd"
-lof_geneset <- t(data.frame(lof_geneset, stringsAsFactors = F));rownames(lof_geneset) <- "lof"
-system("rm -rf skat_grp.grp")
-write.table(x = nonsynonymous_geneset, "skat_grp.grp", sep = "\t",row.names = T, quote = F, col.names = F, append = T)
-write.table(x = cadd_geneset, "skat_grp.grp", sep = "\t", row.names = T, quote = F, col.names = F, append = T)
-write.table(x = lof_geneset, "skat_grp.grp", sep = "\t", row.names = T, quote = F, col.names = F, append = T)
+geneset_df <- read.table(file = "IPDGC_geneset.txt", header = F, encoding = "UTF-8", fill = NA, sep = "\t", stringsAsFactors = F)
+geneset_df <- t.data.frame(geneset_df)
 
 
-#### gene subset
-### exonic
-variant_all_parkinson_gene <- unique(c(variant_all_parkinson$Gene.knownGene))
-paste_temp <- NULL
-temp <- NULL
-system("rm -rf variant_all_parkinson_gene_geneset_gene.grp")
-for( i in 1:length(variant_all_parkinson_gene)){
-  paste_temp <- NULL
-  temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i])) & CADD13_PHRED > 12.37)
-  temp <- subset(temp, subset = ((temp$ExonicFunc.knownGene == "nonsynonymous_SNV"))| temp$ExonicFunc.knownGene == "stopgain"
-                 | temp$ExonicFunc.knownGene ==  "stoploss" | temp$ExonicFunc.knownGene ==  "frameshift_deletion"
-                 | temp$ExonicFunc.knownGene ==  "frameshift_insertion" | temp$ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                 | temp$ExonicFunc.knownGene ==  "splicing")
-  if(nrow(temp) != 0){
-    for(j in 1:nrow(temp)){
-      paste_temp <- c(paste_temp, paste0(temp[j,1], ":", temp[j,2],"_", temp[j,5],"/",temp[j,6]))
-    }
-    paste_temp <- t(data.frame(paste_temp,stringsAsFactors = F));rownames(paste_temp) <- variant_all_parkinson_gene[i]
-    write.table(paste_temp, "variant_all_parkinson_gene_geneset_gene.grp", sep = "\t", row.names = T, col.names = F,append = T, quote = F)
+for(gene in 1:10){
+  setwd("/home/jinoo/skat-o/IPDGC_800/result_IPDGC_800/")
+  ### geneset select
+  geneset_name <- as.character(geneset_df[,i])[1]
+  geneset_name <- gsub(" ", "_", geneset_name)### name extarct;
+  geneset <- as.character(geneset_df[,i])[-1]; geneset <- data.frame(geneset, stringsAsFactors = F)  ### name and reformat
+  geneset <- subset(geneset, subset = ( geneset != ""))[,1]
+  
+  ## NULL dataframe
+  variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, dbSNP147 = NA, REF = NA , ALT = NA, Gene.knownGene = NA, ExonicFunc.knownGene = NA, CADD13_PHRED=NA)[numeric(0), ]
+  
+  ## Parkinson geneset variant
+  # 1:17312586_G/A   grp format
+  
+  for(i in 1:length(geneset)){
+    variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((test_fix$Gene.knownGene == geneset[i] & test_fix$Func.knownGene == "exonic")), 
+                                                                 select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))
   }
-}
-
-
-
-### skat-ot test
-system("mkdir result");setwd("result")
-system("pwd")
-
-MAF <- c(0.01, 0.03, 0.05)
-for(i in MAF){
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_re_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_re_test/skat_grp.grp -out test_1019_maf{maf}.skat -ped /home/jinoo/skat-o/ppmi_re_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_re_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_re_test/variant_all_parkinson_gene_geneset_gene.grp -out test_1019_maf{maf}_gene.skat -ped /home/jinoo/skat-o/ppmi_re_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
-}
-
-### result_adjusted_p value
-system("find . ! -name '*.epacts' -delete")
-file <- list.files()
-
-for(i in 1:length(file)){
-  temp <- read.table(file = file[i], header = F)
-  system(glue("rm -rf {remove}", remove = file[i]))
-  temp_colname <- c("#CHROM","BEGIN","END","MARKER_ID","NS","FRAC_WITH_RARE","NUM_ALL_VARS","NUM_PASS_VARS","NUM_SING_VARS","PVALUE","STATRHO");colnames(temp) <- temp_colname
-  PVALUE_ADJUSTED <- p.adjust(temp$PVALUE, p.adjust.methods[4])
-  temp <- cbind(temp, PVALUE_ADJUSTED)
-  write.table(x = temp, file = file[i], col.names = T, row.names = F, quote = F, sep = "\t")
-}
-
-# mds plot
-# pheno <- c(rep("control", 343),rep("case",618))
-# plink_MDS <- cbind(plink_MDS, pheno)
-# plot(plink_MDS$C1, plink_MDS$C2, col =as.factor(plink_MDS$pheno), xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.02))
-# legend("bottomleft", legend=levels(as.factor(plink_MDS$pheno)), pch="o", col = 1:nlevels(as.factor(plink_MDS$pheno)))
+  
+  ### for gene, variant number
+  variant_num1 <- NULL;variant_num2 <- NULL;data_temp <- NULL; gene_to_variant <- NULL;
+  gene_to_variant <- data.frame(Gene = NA, variant_count=NA)[numeric(0), ]
+  for(i in 1:length(geneset)){
+    variant_num1 <- subset(variant_all_parkinson, subset = ( (Gene.knownGene == geneset[i]))) ### for geneset , all-variant
+    variant_num2 <- nrow(subset(variant_num1, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" | ExonicFunc.knownGene == "stopgain"
+                                                        | ExonicFunc.knownGene ==  "stoploss" | ExonicFunc.knownGene ==  "frameshift_deletion" 
+                                                        | ExonicFunc.knownGene ==  "frameshift_insertion" 
+                                                        | ExonicFunc.knownGene ==  "frameshift_block_substitution" | ExonicFunc.knownGene ==  "splicing")))
+    data_temp <- data.frame(Gene = geneset[i], variant_num2)
+    gene_to_variant <- rbind(gene_to_variant, data_temp)
+  }
+  
+  write.table(gene_to_variant, file = "gene-variant_count_parkinson.txt", quote = F, sep = "\t")
+  
+  ### 1. nonsynonymous geneset
+  nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
+                          | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
+                          | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing")
+  
+  i <- NULL;nonsynonymous_geneset <- c()
+  for(i in 1:nrow(nonsynonymous)){
+    nonsynonymous_geneset <- c(nonsynonymous_geneset, paste0(nonsynonymous[i,1], ":", nonsynonymous[i,2], "_", nonsynonymous[i,5], "/", nonsynonymous[i,6]))
+  }
+  
+  ### 2. CADD > 12.37 variant
+  cadd <- subset(variant_all_parkinson, subset = ( ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) & variant_all_parkinson$CADD13_PHRED > 12.37))
+  i <- NULL;cadd_geneset <- c()
+  for(i in 1:nrow(cadd)){
+    cadd_geneset <- c(cadd_geneset, paste0(cadd[i,1], ":", cadd[i,2], "_", cadd[i,5], "/", cadd[i,6]))
+  }
+  
+  ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
+  lof <- subset(variant_all_parkinson, subset = ( variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
+                                                  | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
+                                                  | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing") & variant_all_parkinson$CADD13_PHRED > 12.37)
+  i <- NULL;lof_geneset <- c()
+  for(i in 1:nrow(lof)){
+    lof_geneset <- c(lof_geneset, paste0(lof[i,1], ":", lof[i,2], "_", lof[i,5], "/", lof[i,6]))
+  }
+  
+  nonsynonymous_geneset <- t(data.frame(nonsynonymous_geneset, stringsAsFactors = F));rownames(nonsynonymous_geneset) <- "nonsynonymous"
+  cadd_geneset <- t(data.frame(cadd_geneset, stringsAsFactors = F));rownames(cadd_geneset) <- "cadd"
+  lof_geneset <- t(data.frame(lof_geneset, stringsAsFactors = F));rownames(lof_geneset) <- "lof"
+  system("rm -rf skat_grp.grp")
+  write.table(x = nonsynonymous_geneset, "skat_grp.grp", sep = "\t",row.names = T, quote = F, col.names = F, append = T)
+  write.table(x = cadd_geneset, "skat_grp.grp", sep = "\t", row.names = T, quote = F, col.names = F, append = T)
+  write.table(x = lof_geneset, "skat_grp.grp", sep = "\t", row.names = T, quote = F, col.names = F, append = T)
+  
+  
+  # #### gene subset
+  # ### exonic
+  # variant_all_parkinson_gene <- unique(c(variant_all_parkinson$Gene.knownGene))
+  # paste_temp <- NULL
+  # temp <- NULL
+  # system("rm -rf variant_all_parkinson_gene_geneset_gene.grp")
+  # for( i in 1:length(variant_all_parkinson_gene)){
+  #   paste_temp <- NULL
+  #   temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i])) & CADD13_PHRED > 12.37)
+  #   temp <- subset(temp, subset = ((temp$ExonicFunc.knownGene == "nonsynonymous_SNV"))| temp$ExonicFunc.knownGene == "stopgain"
+  #                  | temp$ExonicFunc.knownGene ==  "stoploss" | temp$ExonicFunc.knownGene ==  "frameshift_deletion"
+  #                  | temp$ExonicFunc.knownGene ==  "frameshift_insertion" | temp$ExonicFunc.knownGene ==  "frameshift_block_substitution"
+  #                  | temp$ExonicFunc.knownGene ==  "splicing")
+  #   if(nrow(temp) != 0){
+  #     for(j in 1:nrow(temp)){
+  #       paste_temp <- c(paste_temp, paste0(temp[j,1], ":", temp[j,2],"_", temp[j,5],"/",temp[j,6]))
+  #     }
+  #     paste_temp <- t(data.frame(paste_temp,stringsAsFactors = F));rownames(paste_temp) <- variant_all_parkinson_gene[i]
+  #     write.table(paste_temp, "variant_all_parkinson_gene_geneset_gene.grp", sep = "\t", row.names = T, col.names = F,append = T, quote = F)
+  #   }
+  # }
+  
+  ### skat-ot test
+  system(glue("mkdir {result}", result = geneset_name)); setwd(geneset_name)
+  
+  
+  MAF <- c(0.01, 0.03, 0.05)
+  for(i in MAF){
+    system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/IPDGC_800/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/IPDGC_800/result_IPDGC_800/skat_grp.grp -out test_{geneset}_maf{maf}.skat -ped /home/jinoo/skat-o/IPDGC_800/skato_0918_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i, geneset = geneset_name))
+    # system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/ppmi_re_test/skatQC_annotation.vcf.gz -groupf /home/jinoo/skat-o/ppmi_re_test/variant_all_parkinson_gene_geneset_gene.grp -out test_1019_maf{maf}_gene.skat -ped /home/jinoo/skat-o/ppmi_re_test/ppmi.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+  }
+  
+  ### result_adjusted_p value
+  system("find . ! -name '*.epacts' -delete")
+  file <- list.files()
+  system(glue("cp ../skat_grp.grp geneset_{gene}.grp", gene = geneset_name));system(glue("cp ../gene-variant_count_parkinson.txt genecount_{gene}.txt", gene = geneset_name))
+  
+  for(i in 1:length(file)){
+    temp <- read.table(file = file[i], header = F)
+    system(glue("rm -rf {remove}", remove = file[i]))
+    temp_colname <- c("#CHROM","BEGIN","END","MARKER_ID","NS","FRAC_WITH_RARE","NUM_ALL_VARS","NUM_PASS_VARS","NUM_SING_VARS","PVALUE","STATRHO");colnames(temp) <- temp_colname
+    PVALUE_ADJUSTED <- p.adjust(temp$PVALUE, p.adjust.methods[4])
+    temp <- cbind(temp, PVALUE_ADJUSTED)
+    write.table(x = temp, file = file[i], col.names = T, row.names = F, quote = F, sep = "\t")
+  }
+  system(glue("cat test_* > {gene}_result.txt", gene = geneset_name))
+  
+} ## geneset for
