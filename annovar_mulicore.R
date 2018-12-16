@@ -156,8 +156,8 @@ system("tabix -p vcf skatQC_vcftools.flt.vcf.gz")
 ######################################################################
 setwd("/home/jinoo/skat-o/1001_test/")
 test_fix <- read.table(file = "annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
-# geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
-geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
+geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
+# geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
 geneset <- as.character(geneset[,1])
 
 ## NULL dataframe
@@ -250,10 +250,9 @@ for( i in 1:length(variant_all_parkinson_gene)){
 system("mkdir result");setwd("result")
 system("pwd")
 
-MAF <- c(0.01, 0.03, 0.05)
+MAF <- c(0.01, 0.03)
 for(i in MAF){
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/skat_grp.grp -out test_1011_maf{maf}_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/1001_test/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/variant_all_parkinson_gene_geneset_gene.grp -out test_1011_maf{maf}_LSD_gene.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf /home/jinoo/skat-o/IPDGC_800/skatQC_vcftools.flt.vcf.gz -groupf /home/jinoo/skat-o/1001_test/skat_grp.grp -out test_1011_maf{maf}_LSD.skat -ped /home/jinoo/skat-o/skato_0918_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
 }
 
 ### result_adjusted_p value

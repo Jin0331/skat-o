@@ -51,4 +51,5 @@ skat-o.Rproj
 =======
 *.tmp
 *.md
+*.gmt#
 >>>>>>> skat_o_plink_QC_1005
