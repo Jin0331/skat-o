@@ -1,41 +1,21 @@
 library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(dplyr)
+# tool path 
+Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/lee/tool/:/home/lee/annovar/:/home/lee/epacts_0913/bin/")
 
-### pseq, plink to vcf,,, binary to map/ped
-system("/home/lee/tool/pseq NeuroX new-project --resources /home/lee/pseq/hg19/")
-system("/home/lee/tool/pseq NeuroX.pseq load-plink --file dbGaP_NeuroX_filter --id dbGaP_NeuroX_filter")
-system("/home/lee/tool/pseq NeuroX.pseq write-vcf > NeuroX_filter.vcf")
-system("/home/lee/tool/pseq NeuroX_filter.vcf write-vcf --format BGZF --file NeuroX_filter.vcf.gz")
-system("gzip -dc NeuroX_filter.vcf.gz | perl -pe 's/^chr//' - | bgzip > NeuroX_filterchr.vcf.gz")
-system("tabix -p vcf NeuroX_filterchr.vcf.gz")  ### vcf making
+## unknown snp QC(e.g. minor | major 0)
+bim_qc <- read.table(file = "dbGaP_NeuroX_filter.bim", header = F, stringsAsFactors = F)
+bim_zero_snp <- subset.data.frame(x = bim_qc, subset = (V5 == '0' | V6 =='0'), select = "V2")[,1]
+write.table(x = bim_zero_snp, file = "remove_snp_file_0103.txt", sep = "\t", quote = F, row.names = F, col.names = F)
+system("plink --bfile dbGaP_NeuroX_filter --exclude remove_snp_file_0103.txt --make-bed --out skatQC")
+system("plink --bfile dbGaP_NeuroX_filter --recode --out test_0105")
 
-#### binary to map/ped
-system("/home/lee/tool/plink --bfile dbGaP_NeuroX_filter --recode --tab --out dbGap_NeuroX_filter")
-
-#### vcf QC -- KGGSeq
-system("java -Xmx10g -jar /home/lee/kggseq10hg19/kggseq.jar --vcf-file /home/jinoo/skat-o/row_data/NeuroX_filterchr.vcf.gz --ped-file /home/jinoo/skat-o//NeuroX_filter.ped --out /NeuroX_KGGSeq --o-vcf --vcf-filter-in PASS --no-qc --hwe-control 1E-5 --nt 9")
-system("gzip -d NeuroX_KGGSeq.flt.vcf.gz") ## bgzip and tabix
-system("bgzip NeuroX_KGGSeq.flt.vcf")
-system("tabix -p vcf NeuroX_KGGSeq.flt.vcf.gz")
-test <- read.vcfR(file = "NeuroX_filterchr.vcf.gz", convertNA = T, checkFile = F)
-test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
-test_fix <- test$fix;rm(test)
-fwrite(x = test_fix, file = "NeuroX_KGGSeq_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix) ## fix out
-
-################################# vcf to plink, ajk  fo individual QC #################################
-system("mkdir plink")
-
-## plink QC & ajk value
-# system("vcftools --gzvcf skatQC_vcftools.flt.vcf.gz --plink --out plink/skatQC_KGGSeq.flt_plink")
-system("vcftools --gzvcf NeuroX_KGGSeq.flt.vcf.gz --relatedness --out plink/relatedness_ajk") ## ajk
-system("vcftools --gzvcf NeuroX_KGGSeq.flt.vcf.gz --plink --out skatQC_KGGSeq.flt_plink")
-setwd("plink")
-system("/home/lee/tool/plink --file skatQC_KGGSeq.flt_plink --make-bed --out skatQC");system("cp /home/jinoo/skat-o/skato_0918_epacts.ped skatQC.fam")
-system("/home/lee/tool/plink --bfile skatQC --het --out skatQC_het") ### heterogygosity
-
-system("/home/lee/tool/plink --bfile skatQC --indep-pairwise 50 5 0.2 --out skat_pruning")
-system("/home/lee/tool/plink --bfile skatQC --genome full --out skatQC_IBD") ### MDS
-system("/home/lee/tool/plink --bfile skatQC --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out skatQC_MDS")
-system("/home/lee/tool/plink --bfile skatQC --missing --out skatQC_missing") ### individual missing
+## sample QC
+system("plink --bfile skatQC --het --out plink/skatQC_het") ### heterogygosity
+system("plink --bfile skatQC --indep-pairwise 50 5 0.2 --out plink/skat_pruning")
+system("plink --bfile skatQC --genome full --out plink/skatQC_IBD") ### MDS
+system("plink --bfile skatQC --read-genome plink/skatQC_IBD.genome --extract plink/skat_pruning.prune.in --mds-plot 20 --cluster --out plink/skatQC_MDS")
+system("plink --bfile skatQC --missing --out plink/skatQC_missing") ### individual missing
+system("plink --bfile skatQC --check-sex --out plink/skatQC_sex")
 
 #1 heterozygosity
 plink_het <- read.table(file = "skatQC_het.het",header = T, stringsAsFactors = F)
@@ -53,31 +33,41 @@ for(i in 1:nrow(plink_MDS)){
       removal_MDS <- c(removal_MDS, plink_MDS[i,1])
   }
 }
-#3 Ajk value
-ajk_value <- read.table(file = "relatedness_ajk.relatedness", header = T, stringsAsFactors = F)
-removal_ajk <- subset(ajk_value, subset = ( RELATEDNESS_AJK > 0.15 & RELATEDNESS_AJK < 0.9),select = "INDV1")[,1]
 
-#4 missing
+#3 missing
 plink_missing <- read.table(file = "skatQC_missing.imiss", header = T, stringsAsFactors = F)
 removal_imissing <- subset(plink_missing, subset = (F_MISS > 0.15), select = c("IID","F_MISS"))[,1]
 
-# merge & write
-removal_iid <- unique(c(removal_MDS,removal_ajk,removal_het,removal_imissing))
-write.table(x = removal_iid, file = "../plink_ind.txt",sep = "\n", quote = F, row.names = F, col.names = F)
+#4 gender
+plink_gender <- read.table(file = "skatQC_sex.sexcheck", header = T, stringsAsFactors = F)
+removal_gender <- subset(plink_gender, subset = (STATUS == "PROBLEM"), select = c("IID"))[,1]
+
+system("plink --bfile skatQC --geno 0.05 --hwe 1e-6 --make-bed --out skatQC_snp --noweb")
+
+system("pseq NeuroX new-project --resources /home/lee/pseq/hg19/")
+system("pseq NeuroX.pseq load-plink --file skatQC_snp --id skatQC_snp")
+system("pseq NeuroX.pseq write-vcf > NeuroX_filter.vcf")
+system("pseq NeuroX_filter.vcf write-vcf --format BGZF --file NeuroX_filter.vcf.gz")
+system("mv NeuroX_filter.vcf NeuroX_filter.vcf.bak")
+system("gzip -d NeuroX_filter.vcf.gz")
+system("sed -i 's/chr//g' NeuroX_filter.vcf");system("bgzip NeuroX_filter.vcf")
+system("tabix -p vcf NeuroX_filter.vcf.gz") 
+
+#### vcf QC -- vcftools, ajk value
+system("vcftools --gzvcf NeuroX_filter.vcf.gz --relatedness --out plink/relatedness_ajk")
+ajk_value <- read.table(file = "plink/relatedness_ajk.relatedness", header = T, stringsAsFactors = F)
+removal_ajk <- subset(ajk_value, subset = ( RELATEDNESS_AJK > 0.15 & RELATEDNESS_AJK < 0.9),select = "INDV1")[,1]
+
+#5 merge & write
+removal_iid <- unique(c(removal_MDS,removal_het,removal_imissing, removal_gender, removal_ajk))
+write.table(x = removal_iid, file = "plink_ind.txt",sep = "\n", quote = F, row.names = F, col.names = F)
 rm(list=ls());gc()
-#### vcf QC -- vcftools
-setwd("../")
-system("vcftools --gzvcf NeuroX_KGGSeq.flt.vcf.gz --min-alleles 2 --max-alleles 2 --remove plink_ind.txt --recode --out NeuroX_KGGSeq.flt")
-# test <- read.vcfR(file = "NeuroX_skatQC_vcftools.flt.vcf", convertNA = T, checkFile = F)
-# test <- vcfR2tidy(test, info_only = T, single_frame = F, toss_INFO_column = T)
-# test_fix <- test$fix;rm(test)
-# fwrite(x = test_fix, file = "NeuroX_skatQC_vcftools.flt.vcf.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n");rm(test_fix)
 
-system("bgzip NeuroX_skatQC_vcftools.flt.recode.vcf")
-system("tabix -p vcf NeuroX_skatQC_vcftools.flt.recode.vcf.gz")
+system("vcftools --gzvcf NeuroX_filter.vcf.gz --min-alleles 2 --max-alleles 2 --remove plink_ind.txt --recode --out NeuroX_vcftool.flt")
 
+### vcf split
 core <- 9
-temp <- fread(input = "NeuroX_skatQC_vcftools.flt.recode.vcf", sep = "\t", quote = "\n", skip = 3, header = T, nThread = 9)
+temp <- fread(input = "NeuroX_vcftool.flt.recode.vcf", sep = "\t", quote = "\n", skip = 3, header = T, nThread = 9)
 temp_tidy <- dplyr::tbl_df(temp)
 rm("temp")
 vcf_list <- list()
@@ -85,9 +75,11 @@ vcf_list[1] <- list(temp_tidy[1:round(nrow(temp_tidy)/core),])
 for(i in 2:(core)){
   if(i == core){
     vcf_list[i] <- list(temp_tidy[((nrow(vcf_list[[1]])*(i-1))+1):(nrow(temp_tidy)),])
+    gc()
     break;
   }
   vcf_list[i] <- list(temp_tidy[((nrow(vcf_list[[1]])*(i-1))+1):(nrow(vcf_list[[1]])*i),])
+  gc()
 }
 rm(temp_tidy)
 
@@ -106,20 +98,26 @@ path <- list.files(full.names = T)
 registerDoMC(9)
 system.time(
   foreach(i=1:core) %dopar% {
-    system(glue("/home/lee/annovar/table_annovar.pl {path[i]} /home/lee/annovar/humandb/ -buildver hg19 -out {path[i]} -remove -protocol knownGene,avsnp147,cadd13gt10 -operation g,f,f -nastring . -vcfinput"))
+    system(glue("table_annovar.pl {path[i]} /home/lee/annovar/humandb/ -buildver hg19 -out {path[i]} -remove -protocol refGene,knownGene,ALL.sites.2015_08,cadd13gt10 -operation g,g,f,f -nastring . -vcfinput"))
   }
 );gc() #
 
 #### make annotated fix
-temp <- list.files(pattern = "vcf.gz$")
+system("rm -rf *.txt");system("rm -rf *.avinput")
+temp <- list.files(pattern = "*hg19")
+
 mul_vcf <- mclapply(temp, read.vcfR, convertNA =T, checkFile = F, mc.cores = 2)
 mul_anno_fix <- lapply(X = mul_vcf, FUN = function(temp){
   temp2 <- vcfR2tidy(temp, info_only = T, single_frame = F, toss_INFO_column = T)
   return(temp2$fix)
-}) %>% bind_row()
+})
 mul_anno_fix <- bind_rows(mul_anno_fix)
-fwrite(x = mul_anno_fix, file = "NeuroX_annotation_fix.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n")
+rm(mul_vcf)
+fwrite(x = mul_anno_fix, file = "../NeuroX_annotation_fix_0105.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n")
 
+
+system("bgzip NeuroX_vcftool.flt.recode.vcf")
+system("tabix -p vcf NeuroX_vcftool.flt.recode.vcf.gz")
 ################### skat-o preprocessing #############################
 ######################################################################
 
@@ -128,28 +126,28 @@ fwrite(x = mul_anno_fix, file = "NeuroX_annotation_fix.txt", quote = F, sep = "\
 ## new ped
 setwd("../")
 skat_row_ped <- read.table(file = "../NeuroX_filter_epact_row.ped", header = T, stringsAsFactors = F)
-skat_subset <- read.table(file = "plink/plink_ind.txt", header = F, stringsAsFactors = F)[,1]
+skat_subset <- read.table(file = "plink_ind.txt", header = F, stringsAsFactors = F)[,1]
 '%!in%' <- function(x,y)!('%in%'(x,y))
 skat_QC_ped <- NULL
 skat_QC_ped <- subset(skat_row_ped, subset = skat_row_ped$fid %!in% skat_subset)
-write.table(x = skat_QC_ped, file = "../NeuroX_epacts.ped", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(x = skat_QC_ped, file = "../NeuroX_epacts_0105.ped", col.names = T, row.names = F, sep = "\t", quote = F)
 
 system("mkdir result");setwd("result")
 system("pwd")
-test_fix <- read.table(file = "../annotation_fix.txt", sep = "\t", header = T, stringsAsFactors = F)
+test_fix <- read.table(file = "../NeuroX_annotation_fix_0105.txt", sep = "\t", header = T, stringsAsFactors = F)
 # geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
 geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
 geneset <- as.character(geneset[,1])
 
 ## NULL dataframe
-variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, dbSNP147 = NA, REF = NA , ALT = NA, Gene.knownGene = NA, ExonicFunc.knownGene = NA, CADD13_PHRED=NA)[numeric(0), ]
+variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, snp131 = NA, REF = NA , ALT = NA, Gene.knownGene = NA, ExonicFunc.knownGene = NA, CADD13_PHRED=NA)[numeric(0), ]
 
 ## Parkinson geneset variant
 # 1:17312586_G/A   grp format
 
 for(i in 1:length(geneset)){
-  variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((test_fix$Gene.knownGene == geneset[i] & test_fix$Func.knownGene == "exonic")), 
-                                                               select = c("CHROM", "POS", "ID", "avsnp147","REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))
+  variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((Gene.knownGene == geneset[i] & Func.knownGene == "exonic")), 
+                                                               select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))
 }
 
 #### lapply convert !!!!!!!
@@ -158,7 +156,7 @@ for(i in 1:length(geneset)){
 variant_num1 <- NULL;variant_num2 <- NULL;data_temp <- NULL; gene_to_variant <- NULL;
 gene_to_variant <- data.frame(Gene = NA, variant_count=NA)[numeric(0), ]
 for(i in 1:length(geneset)){
-  variant_num1 <- subset(variant_all_parkinson, subset = ( (Gene.knownGene == geneset[i]))) ### for geneset , all-variant
+  variant_num1 <- subset(variant_all_parkinson, subset = ( (Gene.knownGene == geneset[i] & CADD13_PHRED > 12.37))) ### for geneset , all-variant
   variant_num2 <- nrow(subset(variant_num1, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" | ExonicFunc.knownGene == "stopgain"
                                                       | ExonicFunc.knownGene ==  "stoploss" | ExonicFunc.knownGene ==  "frameshift_deletion" 
                                                       | ExonicFunc.knownGene ==  "frameshift_insertion" 
@@ -167,8 +165,8 @@ for(i in 1:length(geneset)){
   gene_to_variant <- rbind(gene_to_variant, data_temp) #### result
 }
 
-# View(gene_to_variant)
-write.table(gene_to_variant, file = "../gene-variant_count_LSD.txt", quote = F, sep = "\t")
+View(gene_to_variant)
+write.table(gene_to_variant, file = "../gene-variant_count_lsd_1229.txt", quote = F, sep = "\t")
 
 ### 1. nonsynonymous geneset
 nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
@@ -235,7 +233,8 @@ for( i in 1:length(variant_all_parkinson_gene)){
 
 MAF <- c(0.01, 0.03)
 for(i in MAF){
-  system(glue("/home/lee/epacts_0913/bin/epacts-group -vcf ../NeuroX_skatQC_vcftools.flt.recode.vcf.gz -groupf skat_grp.grp -out NeuroX_1221_maf{maf}_LSD.skat -ped ../NeuroX_epacts.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 2", maf = i))
+  system(glue("epacts-group -vcf ../NeuroX_vcftool.flt.recode.vcf.gz -groupf skat_grp.grp -out NeuroX_0105_maf{maf}_LSD.skat -ped ../NeuroX_epacts_0105.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 8", maf = i))
+  system(glue("epacts-group -vcf ../NeuroX_vcftool.flt.recode.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp -out NeuroX_0105_maf{maf}_LSD_gene.skat -ped ../NeuroX_epacts_0105.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 8", maf = i))
 }
 
 ### result_adjusted_p value
