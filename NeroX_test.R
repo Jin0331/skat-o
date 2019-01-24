@@ -1,13 +1,12 @@
 library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(dplyr)
 # tool path 
 Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/lee/tool/:/home/lee/annovar/:/home/lee/epacts_0913/bin/")
-
+system("")
 ## unknown snp QC(e.g. minor | major 0)
 bim_qc <- read.table(file = "dbGaP_NeuroX_filter.bim", header = F, stringsAsFactors = F)
 bim_zero_snp <- subset.data.frame(x = bim_qc, subset = (V5 == '0' | V6 =='0'), select = "V2")[,1]
 write.table(x = bim_zero_snp, file = "remove_snp_file_0103.txt", sep = "\t", quote = F, row.names = F, col.names = F)
 system("plink --bfile dbGaP_NeuroX_filter --exclude remove_snp_file_0103.txt --make-bed --out skatQC")
-system("plink --bfile dbGaP_NeuroX_filter --recode --out test_0105")
 
 ## sample QC
 system("plink --bfile skatQC --het --out plink/skatQC_het") ### heterogygosity
@@ -67,7 +66,8 @@ system("vcftools --gzvcf NeuroX_filter.vcf.gz --min-alleles 2 --max-alleles 2 --
 
 ### vcf split
 core <- 9
-temp <- fread(input = "NeuroX_vcftool.flt.recode.vcf", sep = "\t", quote = "\n", skip = 3, header = T, nThread = 9)
+temp <- fread(input = "NeuroX_filter.vcf", sep = "\t", quote = "\n", skip = 2, select = 1:1000, header = T, nThread = 9) ### if qc, skip = 3 and select remove
+
 temp_tidy <- dplyr::tbl_df(temp)
 rm("temp")
 vcf_list <- list()
@@ -98,7 +98,7 @@ path <- list.files(full.names = T)
 registerDoMC(9)
 system.time(
   foreach(i=1:core) %dopar% {
-    system(glue("table_annovar.pl {path[i]} /home/lee/annovar/humandb/ -buildver hg19 -out {path[i]} -remove -protocol refGene,knownGene,ALL.sites.2015_08,cadd13gt10 -operation g,g,f,f -nastring . -vcfinput"))
+    system(glue("table_annovar.pl {path[i]} /home/lee/annovar/humandb/ -buildver hg19 -out {path[i]} -remove -protocol knownGene,avsnp147,cadd13gt10 -operation g,f,f -nastring . -vcfinput"))
   }
 );gc() #
 
