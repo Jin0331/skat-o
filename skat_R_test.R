@@ -1,4 +1,7 @@
+install.packages("SKAT")
 library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(dplyr)
+library(SKAT)
+
 # tool path 
 Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/lee/tool/:/home/lee/annovar/:/home/lee/epacts_0913/bin/")
 
@@ -7,20 +10,19 @@ bim_qc <- read.table(file = "dbGaP_NeuroX_filter.bim", header = F, stringsAsFact
 bim_zero_snp <- subset.data.frame(x = bim_qc, subset = (V5 == '0' | V6 =='0'), select = "V2")[,1]
 write.table(x = bim_zero_snp, file = "remove_snp_file_0129.txt", sep = "\t", quote = F, row.names = F, col.names = F)
 
-system("mkdir data");setwd("data/")
+system("mkdir plink");setwd("plink/")
 system("plink --bfile ../dbGaP_NeuroX_filter --exclude ../remove_snp_file_0129.txt --make-bed --out skatQC")
-system("./update_build.sh skatQC ../NeuroX_15036164_A-b37.Ilmn.strand skatQC_strand") ### strand update
+system("../update_build.sh skatQC ../NeuroX_15036164_A-b37.Ilmn.strand skatQC_strand") ### strand update
 system("plink --bfile skatQC_strand --reference-allele ../NeuroX_15036164_A-b37.strand.RefAlt --make-bed --out skatQC_strand_ref")
 setwd("../")
 
 ## sample QC
-system("mkdir plink");setwd("plink/")
-system("plink --bfile ../data/skatQC_strand_ref --het --out skatQC_het") ### heterogygosity
-system("plink --bfile ../data/skatQC_strand_ref --indep-pairwise 50 5 0.2 --out skat_pruning")
-system("plink --bfile ../data/skatQC_strand_ref --genome full --out skatQC_IBD") ### MDS
-system("plink --bfile ../data/skatQC_strand_ref --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out skatQC_MDS")
-system("plink --bfile ../data/skatQC_strand_ref --missing --out skatQC_missing") ### individual missing
-system("plink --bfile ../data/skatQC_strand_ref --check-sex --out skatQC_sex")
+system("plink --bfile skatQC_strand_ref --het --out skatQC_het") ### heterogygosity
+system("plink --bfile skatQC_strand_ref --indep-pairwise 50 5 0.2 --out skat_pruning")
+system("plink --bfile skatQC_strand_ref --genome full --out skatQC_IBD") ### MDS
+system("plink --bfile skatQC_strand_ref --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out skatQC_MDS")
+system("plink --bfile skatQC_strand_ref --missing --out skatQC_missing") ### individual missing
+system("plink --bfile skatQC_strand_ref --check-sex --out skatQC_sex")
 
 #1 heterozygosity
 plink_het <- read.table(file = "skatQC_het.het",header = T, stringsAsFactors = F)
@@ -48,33 +50,28 @@ plink_gender <- read.table(file = "skatQC_sex.sexcheck", header = T, stringsAsFa
 removal_gender <- subset(plink_gender, subset = (STATUS == "PROBLEM"), select = c("IID"))[,1]
 
 #5 vcf QC -- vcftools, ajk value
-
-# system("pseq NeuroX new-project --resources /home/lee/pseq/hg19/")
-# system("pseq NeuroX.pseq load-plink --file skatQC_snp --id skatQC_snp")
-# system("pseq NeuroX.pseq write-vcf > NeuroX_filter.vcf")
-# system("pseq NeuroX_filter.vcf write-vcf --format BGZF --file NeuroX_filter.vcf.gz")
-# system("mv NeuroX_filter.vcf NeuroX_filter.vcf.bak")
-# system("gzip -d NeuroX_filter.vcf.gz")
-
-system("plink --bfile ../data/skatQC_strand_ref --recode vcf-iid --allow-no-sex --keep-allele-order --out NeuroX_filter")
+system("plink --bfile skatQC_strand_ref --recode vcf-iid --allow-no-sex --keep-allele-order --out NeuroX_filter")
 system("sed -i 's/chr//g' NeuroX_filter.vcf")
 
 #6 merge & write
 removal_iid <- unique(c(removal_MDS,removal_het,removal_imissing, removal_gender)) #, removal_ajk
-write.table(x = removal_iid, file = "plink_ind.txt",sep = "\n", quote = F, row.names = F, col.names = F)
+removal_iid <- data.frame(FID=removal_iid, IID=removal_iid, stringsAsFactors = F)
+write.table(x = removal_iid, file = "plink_ind.txt",sep = "\t", quote = F, row.names = F, col.names = F)
 rm(list=ls());gc()
 
-system("plink --bfile ../data/skatQC_strand_ref --geno 0.01 --hwe 1e-6 --make-bed --out skatQC_strand_ref_snp --noweb")
-system("plink --bfile skatQC_strand_ref_snp --recode vcf-iid --allow-no-sex --keep-allele-order --out ../NeuroX_filter_qc")
-system("sed -i 's/chr//g' NeuroX_filter_qc.vcf")
+#7 snp qc and write vcf format
+system("plink --bfile skatQC_strand_ref --geno 0.01 --hwe 1e-6 --remove plink_ind.txt --make-bed --out ../skatQC_strand_ref_snp --noweb")
+system("plink --bfile ../skatQC_strand_ref_snp --recode vcf-iid --allow-no-sex --keep-allele-order --out ../NeuroX_filter_qc")
+system("sed -i 's/chr//g' ../NeuroX_filter_qc.vcf")
 system("bgzip NeuroX_filter_qc.vcf")
 system("tabix -p vcf NeuroX_filter_qc.vcf.gz") 
+system("vcftools --gzvcf NeuroX_filter_qc.vcf.gz --min-alleles 2 --max-alleles 2 --recode --out NeuroX_vcftool_qc.flt")
 
-system("vcftools --gzvcf NeuroX_filter_qc.vcf.gz --min-alleles 2 --max-alleles 2 --remove plink/plink_ind.txt --recode --out NeuroX_vcftool_qc.flt")
 
 ### vcf split
+setwd("../")
 core <- 9
-temp <- fread(input = "NeuroX_vcftool_qc.flt.recode.vcf", sep = "\t", quote = "\n", skip = 30, header = T, nThread = 5) ### if qc, skip = 3 and select remove
+temp <- fread(input = "NeuroX_vcftool_qc.flt.recode.vcf", sep = "\t", quote = "\n", skip = 30, select = 1:9, header = T, nThread = 9) ### if qc, skip = 3 and select remove
 
 temp_tidy <- dplyr::tbl_df(temp)
 rm("temp")
@@ -90,7 +87,6 @@ for(i in 2:(core)){
   gc()
 }
 rm(temp_tidy);gc()
-
 
 ## for annotation, vcf out
 system("mkdir vcf")
@@ -122,15 +118,13 @@ mul_anno_fix <- lapply(X = mul_vcf, FUN = function(temp){
 })
 mul_anno_fix <- bind_rows(mul_anno_fix)
 rm(mul_vcf)
-fwrite(x = mul_anno_fix, file = "../NeuroX_annotation_fix_0129.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n")
+fwrite(x = mul_anno_fix, file = "../NeuroX_annotation_fix_0129_rere.txt", quote = F, sep = "\t", row.names = F, col.names = T, eol = "\n")
 
 setwd("../")
 system("bgzip NeuroX_vcftool_qc.flt.recode.vcf")
 system("tabix -p vcf NeuroX_vcftool_qc.flt.recode.vcf.gz")
 ################### skat-o preprocessing #############################
 ######################################################################
-
-
 
 ## new ped
 setwd("../")
@@ -141,11 +135,14 @@ skat_QC_ped <- NULL
 skat_QC_ped <- subset(skat_row_ped, subset = skat_row_ped$fid %!in% skat_subset)
 write.table(x = skat_QC_ped, file = "../NeuroX_epacts_0129.ped", col.names = T, row.names = F, sep = "\t", quote = F)
 
+## skat-o test
 system("mkdir result");setwd("result")
 system("pwd")
-test_fix <- read.table(file = "../NeuroX_annotation_fix_0129.txt", sep = "\t", header = T, stringsAsFactors = F)
-geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
-# geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
+system("plink --bfile ../skatQC_strand_ref_snp --freq --out skatQC_strand_ref_snp")  ### maf
+frq <- fread(file = "skatQC_strand_ref_snp.frq", header = T)
+test_fix <- read.table(file = "../NeuroX_annotation_fix_0129_rere.txt", sep = "\t", header = T, stringsAsFactors = F)
+# geneset <- read.csv("/home/jinoo/skat-o/parkinson_genset.txt", stringsAsFactors = F,header = F)
+geneset <- read.csv("/home/jinoo/skat-o/LSD_geneset.txt", stringsAsFactors = F,header = F)
 geneset <- as.character(geneset[,1])
 
 ## NULL dataframe
@@ -156,99 +153,75 @@ variant_all_parkinson <- data.frame(CHROM = NA, POS = NA, ID = NA, snp131 = NA, 
 
 for(i in 1:length(geneset)){
   variant_all_parkinson <- rbind(variant_all_parkinson, subset(test_fix, subset = ((Gene.knownGene == geneset[i] & Func.knownGene == "exonic")), 
-                                                               select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))
-}
+                                                               select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED")))}
 
-#### lapply convert !!!!!!!
+# minor allele frequency test
+frq$SNP <- gsub(pattern = "chr", replacement = "", x = frq$SNP)
+MAF <- mclapply(X = variant_all_parkinson$ID, FUN = function(ID){
+  index <- which(x = (str_detect(frq$SNP, paste0("^",ID,"$"))), arr.ind = T)
+  return(frq$MAF[index])
+}, mc.cores = 9) %>% as.numeric()
 
-### for gene, variant number
-variant_num1 <- NULL;variant_num2 <- NULL;data_temp <- NULL; gene_to_variant <- NULL;
-gene_to_variant <- data.frame(Gene = NA, variant_count=NA)[numeric(0), ]
-for(i in 1:length(geneset)){
-  variant_num1 <- subset(variant_all_parkinson, subset = ( (Gene.knownGene == geneset[i] & CADD13_PHRED > 12.37))) ### for geneset , all-variant
-  variant_num2 <- nrow(subset(variant_num1, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" | ExonicFunc.knownGene == "stopgain"
-                                                      | ExonicFunc.knownGene ==  "stoploss" | ExonicFunc.knownGene ==  "frameshift_deletion" 
-                                                      | ExonicFunc.knownGene ==  "frameshift_insertion" 
-                                                      | ExonicFunc.knownGene ==  "frameshift_block_substitution" | ExonicFunc.knownGene ==  "splicing")))
-  data_temp <- data.frame(Gene = geneset[i], variant_num2)
-  gene_to_variant <- rbind(gene_to_variant, data_temp) #### result
-}
-
-View(gene_to_variant)
-write.table(gene_to_variant, file = "../gene-variant_count_parkinson_0128.txt", quote = F, sep = "\t")
+variant_all_parkinson <- cbind(variant_all_parkinson, MAF = MAF)
 
 ### 1. nonsynonymous geneset
-nonsynonymous <- subset(variant_all_parkinson, subset = ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) | variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
-                        | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
-                        | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing")
-
-i <- NULL;nonsynonymous_geneset <- c()
-for(i in 1:nrow(nonsynonymous)){
-  nonsynonymous_geneset <- c(nonsynonymous_geneset, paste0(nonsynonymous[i,1], ":", nonsynonymous[i,2], "_", nonsynonymous[i,4], "/", nonsynonymous[i,5]))
-}
+nonsynonymous <- subset(variant_all_parkinson, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" 
+                                                | ExonicFunc.knownGene == "stopgain"
+                                                | ExonicFunc.knownGene ==  "stoploss" 
+                                                | ExonicFunc.knownGene ==  "frameshift_deletion" 
+                                                | ExonicFunc.knownGene ==  "frameshift_insertion"
+                                                | ExonicFunc.knownGene ==  "frameshift_block_substitution" 
+                                                | ExonicFunc.knownGene ==  "splicing"))
+nonsynonymous_maf_1 <- subset(nonsynonymous, subset = (MAF <= 0.01), select = "ID")[,1]
+nonsynonymous_maf_3 <- subset(nonsynonymous, subset = (MAF <= 0.03), select = "ID")[,1]
 
 ### 2. CADD > 12.37 variant
-cadd <- subset(variant_all_parkinson, subset = ( ((variant_all_parkinson$ExonicFunc.knownGene == "nonsynonymous_SNV")) & variant_all_parkinson$CADD13_PHRED > 12.37))
-i <- NULL;cadd_geneset <- c()
-for(i in 1:nrow(cadd)){
-  cadd_geneset <- c(cadd_geneset, paste0(cadd[i,1], ":", cadd[i,2], "_", cadd[i,4], "/", cadd[i,5]))
-}
+cadd <- subset(variant_all_parkinson, subset = ( ExonicFunc.knownGene == "nonsynonymous_SNV"
+                                                 | ExonicFunc.knownGene == "stopgain"
+                                                 | ExonicFunc.knownGene ==  "stoploss" 
+                                                 | ExonicFunc.knownGene ==  "frameshift_deletion" 
+                                                 | ExonicFunc.knownGene ==  "frameshift_insertion"
+                                                 | ExonicFunc.knownGene ==  "frameshift_block_substitution" 
+                                                 | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37)
+cadd_maf_1 <- subset(cadd, subset = (MAF <= 0.01), select = "ID")[,1]
+cadd_maf_3 <- subset(cadd, subset = (MAF <= 0.03), select = "ID")[,1]
 
 ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
-lof <- subset(variant_all_parkinson, subset = ( variant_all_parkinson$ExonicFunc.knownGene == "stopgain" | variant_all_parkinson$ExonicFunc.knownGene ==  "stoploss" 
-                                                | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_deletion" | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_insertion" 
-                                                | variant_all_parkinson$ExonicFunc.knownGene ==  "frameshift_block_substitution" | variant_all_parkinson$ExonicFunc.knownGene ==  "splicing") & variant_all_parkinson$CADD13_PHRED > 12.37)
-i <- NULL;lof_geneset <- c()
-if(nrow(lof) != 0 ){
-  for(i in 1:nrow(lof)){
-    lof_geneset <- c(lof_geneset, paste0(lof[i,1], ":", lof[i,2], "_", lof[i,4], "/", lof[i,5]))
-  }
+lof <- subset(variant_all_parkinson, subset = ( ExonicFunc.knownGene == "stopgain" 
+                                                | ExonicFunc.knownGene ==  "stoploss" 
+                                                | ExonicFunc.knownGene ==  "frameshift_deletion" 
+                                                | ExonicFunc.knownGene ==  "frameshift_insertion" 
+                                                | ExonicFunc.knownGene ==  "frameshift_block_substitution" 
+                                                | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37)
+
+lof_maf_1 <- subset(lof, subset = (MAF <= 0.01), select = "ID")[,1]
+lof_maf_3 <- subset(lof, subset = (MAF <= 0.03), select = "ID")[,1]
+
+type_1 <- list(nonsynonymous = nonsynonymous_maf_1, cadd = cadd_maf_1, lof = lof_maf_1)
+type_3 <- list(nonsynonymous = nonsynonymous_maf_3, cadd = cadd_maf_3, lof = lof_maf_3)
+
+setID <- list()
+for(index in 1:length(type)){
+  temp <- data.frame(TYPE=rep(names(type_3[index]), length(type_3[[index]])), stringsAsFactors = F)
+  setID[[index]] <- cbind(temp, ID=type_3[[index]])
 }
-nonsynonymous_geneset <- t(data.frame(nonsynonymous_geneset, stringsAsFactors = F));rownames(nonsynonymous_geneset) <- "nonsynonymous"
-cadd_geneset <- t(data.frame(cadd_geneset, stringsAsFactors = F));rownames(cadd_geneset) <- "cadd"
-if(nrow(lof) !=0){
-  lof_geneset <- t(data.frame(lof_geneset, stringsAsFactors = F));rownames(lof_geneset) <- "lof"}
-system("rm -rf skat_grp.grp")
-write.table(x = nonsynonymous_geneset, "skat_grp.grp", sep = "\t",row.names = T, quote = F, col.names = F, append = T)
-write.table(x = cadd_geneset, "skat_grp.grp", sep = "\t", row.names = T, quote = F, col.names = F, append = T)
-write.table(x = lof_geneset, "skat_grp.grp", sep = "\t", row.names = T, quote = F, col.names = F, append = T)
+setID <- bind_rows(setID)
+
+system("rm -rf skat.SetID")
+write.table(x = setID, "skat_maf_003.SetID", sep = "\t",row.names = F, quote = F, col.names = F)
 
 
-#### gene subset
-### exonic
-variant_all_parkinson_gene <- unique(c(variant_all_parkinson$Gene.knownGene))
-paste_temp <- NULL
-temp <- NULL
-system("rm -rf variant_all_parkinson_gene_geneset_gene.grp")
-for( i in 1:length(variant_all_parkinson_gene)){
-  paste_temp <- NULL
-  temp <- subset(variant_all_parkinson, subset = ((Gene.knownGene %in% variant_all_parkinson_gene[i])) & CADD13_PHRED > 12.37)
-  temp <- subset(temp, subset = ((temp$ExonicFunc.knownGene == "nonsynonymous_SNV"))| temp$ExonicFunc.knownGene == "stopgain"
-                 | temp$ExonicFunc.knownGene ==  "stoploss" | temp$ExonicFunc.knownGene ==  "frameshift_deletion"
-                 | temp$ExonicFunc.knownGene ==  "frameshift_insertion" | temp$ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                 | temp$ExonicFunc.knownGene ==  "splicing")
-  if(nrow(temp) != 0){
-    for(j in 1:nrow(temp)){
-      paste_temp <- c(paste_temp, paste0(temp[j,1], ":", temp[j,2],"_", temp[j,4],"/",temp[j,5]))
-    }
-    paste_temp <- t(data.frame(paste_temp,stringsAsFactors = F));rownames(paste_temp) <- variant_all_parkinson_gene[i]
-    write.table(paste_temp, "variant_all_parkinson_gene_geneset_gene.grp", sep = "\t", row.names = T, col.names = F,append = T, quote = F)
-  }
-}
+## skat-o test
+Generate_SSD_SetID(File.Bed = "../skatQC_strand_ref_snp.bed",File.Bim = "../skatQC_strand_ref_snp.bim", 
+                   File.Fam = "../skatQC_strand_ref_snp.fam", File.SetID = "skat_maf_001.SetID", File.SSD = "skatQC.SSD", File.Info = "skatQC.INFO")
+FAM<-Read_Plink_FAM(Filename = "../skatQC_strand_ref_snp.fam", Is.binary = FALSE)
+SSD.INFO <- Open_SSD(File.SSD = "skatQC.SSD", File.Info = "skatQC.INFO")
 
-
-
-### skat-ot test
-
-MAF <- c(0.01, 0.03)
-for(i in MAF){
-  system(glue("epacts-group -vcf ../NeuroX_vcftool_qc.flt.recode.vcf.gz -groupf skat_grp.grp -out NeuroX_0129_maf{maf}_PARK.skat -ped ../NeuroX_epacts_0129.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 4", maf = i))
-  system(glue("epacts-group -vcf ../NeuroX_vcftool_qc.flt.recode.vcf.gz -groupf variant_all_parkinson_gene_geneset_gene.grp -out NeuroX_0129_maf{maf}_PARK_gene.skat -ped ../NeuroX_epacts_0129.ped -max-maf {maf} -pheno disease -cov sex -missing ./. -test skat -skat-o -run 4", maf = i))
-}
+obj<-SKAT_Null_Model(Phenotype ~ Sex, data = FAM, out_type="C", Adjustment = F)
+out <- SKAT.SSD.All(SSD.INFO, obj, method = "SKATO")
+out$results
 
 ### result_adjusted_p value
-system("find . ! -name '*.epacts' -delete")
-file <- list.files()
 
 for(i in 1:length(file)){
   temp <- read.table(file = file[i], header = F)
