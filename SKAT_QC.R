@@ -3,7 +3,7 @@
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC)
   library(tidyverse)
 # tool path 
-  Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/lee/tool/:/home/lee/annovar/:/home/lee/epacts_0913/bin/")
+  Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
 }
 
 ## unknown snp QC(e.g. minor | major 0) for strand
