@@ -46,10 +46,9 @@ skat-o.Rproj
 *.txt
 *.tbi
 *.ped
-<<<<<<< HEAD
-*.tmp
-=======
 *.tmp
 *.md
 *.gmt#
 *.pseq*
+*.RData
+*.MD
