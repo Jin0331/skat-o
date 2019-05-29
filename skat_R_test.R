@@ -68,6 +68,9 @@ system("tabix -p vcf NeuroX_filter_qc.vcf.gz")
 system("vcftools --gzvcf NeuroX_filter_qc.vcf.gz --min-alleles 2 --max-alleles 2 --recode --out NeuroX_vcftool_qc.flt")
 
 
+system("pseq test_0207 new-project --")
+
+
 ### vcf split
 setwd("../")
 core <- 9
@@ -219,7 +222,7 @@ SSD.INFO <- Open_SSD(File.SSD = "skatQC.SSD", File.Info = "skatQC.INFO")
 
 obj<-SKAT_Null_Model(Phenotype ~ Sex, data = FAM, out_type="C", Adjustment = F)
 out <- SKAT.SSD.All(SSD.INFO, obj, method = "SKATO")
-out$results
+Get_Resampling_Pvalue(out)
 
 ### result_adjusted_p value
 
