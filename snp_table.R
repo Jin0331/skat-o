@@ -1,12 +1,11 @@
 # library path
-{
+library_load <- function(){
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC)
   library(tidyverse);library(progress);  library(parallel)
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
 }
 
-#
 # function
 geneset_load <- function(){
   print("Geneset load_0428!")
@@ -106,17 +105,39 @@ geneset_extract <- function(geneset_merge, col_name, test_fix, data_name, index_
   
 } 
 
-snp_table <- function(data_name, index_){
-  core <- detectCores()-1
-  geneset_result <- list()
-  geneset <- geneset_load()
-  fix <- fix_load(data_name)
-  
+clinvar_load <- function(){
+  # clinvar preprocessing
   clinvar <- fread(file = "/home/jinoo/skat-o/SKAT_data/clinvar_20190506.vcf", header = T) %>%
     mutate(., CHROM = str_replace(string = CHROM, pattern = "X", replacement = "23")) %>%
     mutate(., CHROM = str_replace(string = CHROM, pattern = "Y", replacement = "24")) %>%
     mutate(., CHROM = str_replace(string = CHROM, pattern = "MT", replacement = "26")) %>%
     mutate(., CHROMPOS = paste(CHROM, POS, sep = ":"))
+  
+  info <- mclapply(X = clinvar$INFO, FUN = clinvar_info, mc.cores = detectCores() - 1) %>% bind_rows()
+  clinvar <- clinvar %>% select(-INFO) %>% bind_cols(info)
+  return(clinvar)
+}
+clinvar_info <- function(temp){
+  str_split(temp,pattern = ";")[[1]] %>% 
+    as_tibble() %>% separate(value, c("info","value"), sep = "=") %>% 
+    spread(key = "info", value = "value") %>% return()
+}
+re_CLNSIG <- function(CHROMPOS, clinvar){
+  select(clinvar[which(str_detect(clinvar$CHROMPOS, CHROMPOS))[1], ], CLNSIG)[,1] %>%
+    return()
+}
+re_CLNDISDB <- function(CHROMPOS, clinvar){
+  select(clinvar[which(str_detect(clinvar$CHROMPOS, CHROMPOS))[1], ], CLNDISDB)[,1] %>%
+    return()
+}
+
+
+snp_table <- function(data_name, index_, clinvar){
+  core <- detectCores() - 1
+  geneset_result <- list()
+  geneset <- geneset_load()
+  fix <- fix_load(data_name)
+  # clinvar <- clinvar_load()
   
   freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
     rename(ID = SNP)
@@ -125,7 +146,6 @@ snp_table <- function(data_name, index_){
   geneset_extract(geneset[[1]], geneset[[2]], fix, data_name, index_)
   
   if(data_name == "IPDGC"){
-  
     for(index in index_){
       system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
                   data_name = data_name, geneset = geneset[[2]][index]))
@@ -138,7 +158,9 @@ snp_table <- function(data_name, index_){
       print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
       nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
         anno_data_nonsyn <- filter(fix, ID == str_split(colnames(nonsyn_dosage)[col_len], pattern = "_")[[1]][1]) %>%
-          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF)
+          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
+          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+                 CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_nonsyn <- select(nonsyn_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
         anno_data_mul <- tibble(.rows = 0)
@@ -152,7 +174,9 @@ snp_table <- function(data_name, index_){
       print(paste(geneset[[2]][index],"lof", sep = " "))
       lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
         anno_data_lof <- filter(fix, ID == str_split(colnames(lof_dosage)[col_len], pattern = "_")[[1]][1]) %>%
-          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF)
+          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
+          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+                 CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_lof <- select(lof_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
         anno_data_mul <- tibble(.rows = 0)
@@ -164,11 +188,14 @@ snp_table <- function(data_name, index_){
       }, mc.cores = core) %>% bind_rows()
       
       nonsyn_result <- nonsyn_result %>%
-        mutate(., Datasets = data_name, geneset = geneset[[2]][index], Func = "Nonsynonymous",
-               AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"))
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               Datasets = data_name, geneset = geneset[[2]][index], 
+               Func = "Nonsynonymous")
+      
       lof_result <- lof_result %>%
-        mutate(., Datasets = data_name, geneset = geneset[[2]][index], Func = "LoF",
-               AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"))
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               Datasets = data_name, 
+               geneset = geneset[[2]][index], Func = "LoF")
       
       geneset_result[[geneset[[2]][index]]] <- bind_rows(nonsyn_result, lof_result)
     }
@@ -186,7 +213,9 @@ snp_table <- function(data_name, index_){
       print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
       nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
         anno_data_nonsyn <- filter(fix, ID == str_sub(colnames(nonsyn_dosage)[col_len], end = -3)) %>%
-          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF)
+          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
+          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+                 CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_nonsyn <- select(nonsyn_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
         anno_data_mul <- tibble(.rows = 0)
@@ -200,9 +229,10 @@ snp_table <- function(data_name, index_){
       
       print(paste(geneset[[2]][index],"lof", sep = " "))
       lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
-        
         anno_data_lof <- filter(fix, ID == str_sub(colnames(lof_dosage)[col_len], end = -3)) %>%
-          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF)
+          select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
+          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+                 CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_lof <- select(lof_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
         anno_data_mul <- tibble(.rows = 0)
@@ -214,11 +244,15 @@ snp_table <- function(data_name, index_){
       }, mc.cores = core) %>% bind_rows()
       
       nonsyn_result <- nonsyn_result %>%
-        mutate(., Datasets = data_name, geneset = geneset[[2]][index], Func = "Nonsynonymous",
-               AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"))
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               Datasets = data_name, geneset = geneset[[2]][index], 
+               Func = "Nonsynonymous")
+      
       lof_result <- lof_result %>%
-        mutate(., Datasets = data_name, geneset = geneset[[2]][index], Func = "LoF",
-               AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"))
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               Datasets = data_name, 
+               geneset = geneset[[2]][index], 
+               Func = "LoF")
       
       geneset_result[[geneset[[2]][index]]] <- bind_rows(nonsyn_result, lof_result)
     }
