@@ -68,6 +68,10 @@ fix_load <- function(data_name){
   }
   test_fix$ID <- test_id
   
+  freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+    rename(ID = SNP)
+  test_fix <- left_join(x = test_fix, y = freq, by = "ID")
+  
   return(test_fix)
 } # data_name, "IPDGC", "NeuroX"
 
