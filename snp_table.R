@@ -142,10 +142,6 @@ snp_table <- function(data_name, index_, clinvar){
   fix <- fix_load(data_name)
   # clinvar <- clinvar_load()
   
-  freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
-    rename(ID = SNP)
-  fix <- left_join(x = fix, y = freq, by = "ID")
-  
   geneset_extract(geneset[[1]], geneset[[2]], fix, data_name, index_)
   
   if(data_name == "IPDGC"){
