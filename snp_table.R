@@ -158,7 +158,7 @@ snp_table <- function(data_name, index_, clinvar){
       nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
         anno_data_nonsyn <- filter(fix, ID == str_split(colnames(nonsyn_dosage)[col_len], pattern = "_")[[1]][1]) %>%
           select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
-          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
                  CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_nonsyn <- select(nonsyn_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
@@ -174,7 +174,7 @@ snp_table <- function(data_name, index_, clinvar){
       lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
         anno_data_lof <- filter(fix, ID == str_split(colnames(lof_dosage)[col_len], pattern = "_")[[1]][1]) %>%
           select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
-          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
                  CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_lof <- select(lof_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
@@ -213,7 +213,7 @@ snp_table <- function(data_name, index_, clinvar){
       nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
         anno_data_nonsyn <- filter(fix, ID == str_sub(colnames(nonsyn_dosage)[col_len], end = -3)) %>%
           select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
-          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
                  CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_nonsyn <- select(nonsyn_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
@@ -230,7 +230,7 @@ snp_table <- function(data_name, index_, clinvar){
       lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
         anno_data_lof <- filter(fix, ID == str_sub(colnames(lof_dosage)[col_len], end = -3)) %>%
           select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
-          mutate(VUS = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar), 
                  CLNDISDB = re_CLNDISDB(paste(CHROM, POS, sep = ":"), clinvar))
         sample_lof <- select(lof_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% select(., IID, PHENOTYPE)
         
