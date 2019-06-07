@@ -42,19 +42,26 @@ geneset_load <- function(){
   geneset_onehot <- bind_cols(geneset_onehot, CHD)
   
   DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/DEG_geneset.txt", header = T, sep = "\t", stringsAsFactors = F, data.table = F)
+  meta_DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/$Table 3 and 4. result_down_intersect_190520_0603.txt", header = T, data.table = F)
+  
   
   DEG1 <- DEG$DEG1 %>% as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG1) <- "DEG1"
-  DEG2 <- DEG$DEG1YJK[DEG$DEG1YJK != ""] %>% as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG2) <- "DEG1YJK"
-  DEG3 <- DEG$DEG1Mito[DEG$DEG1Mito != ""] %>% as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG3) <- "DEG1Mito"
+  DEG2 <- DEG$DEG1YJK[DEG$DEG1YJK != ""] %>% as_tibble() %>% 
+    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG2) <- "DEG1YJK"
+  DEG3 <- DEG$DEG1Mito[DEG$DEG1Mito != ""] %>% as_tibble() %>% 
+    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG3) <- "DEG1Mito"
+  meta_DEG <- meta_DEG$SYMBOL[meta_DEG$SYMBOL != ""] %>% as_tibble() %>%
+    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(meta_DEG) <- "META_DEG"
   
-  geneset_onehot <- geneset_onehot %>% bind_cols(., DEG1) %>% bind_cols(., DEG2) %>% bind_cols(., DEG3)
+  geneset_onehot <- geneset_onehot %>% bind_cols(., DEG1) %>% bind_cols(., DEG2) %>% bind_cols(., DEG3) %>%
+    bind_cols(., meta_DEG)
   
   
   return_list[[1]] <- geneset_onehot %>% as.list()
   return_list[[2]]<- colnames(geneset_onehot)
   
   return(return_list)
-} ## 1 = geneset_list, 2 = col_name
+}
 fix_load <- function(data_name){
   print(paste0(data_name, " fix load!"))
   test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
@@ -79,7 +86,7 @@ fix_load <- function(data_name){
 } # data_name, "IPDGC", "NeuroX"
 geneset_extract <- function(geneset_merge, col_name, test_fix, data_name, index_){
   print("geneset SetID making!!")
-
+  
   for(gene in index_){ # 2:length(col_name), c(2,3,7,16,17)
     geneset <- geneset_merge[[gene]][!is.na(geneset_merge[[gene]])]
     variant <- list()
@@ -208,7 +215,7 @@ snp_table <- function(data_name, index_, clinvar){
       
       nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
       lof_dosage <- fread(file = "test_dosage_lof.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
-
+      
       print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
       nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
         anno_data_nonsyn <- filter(fix, ID == str_sub(colnames(nonsyn_dosage)[col_len], end = -3)) %>%
@@ -224,7 +231,7 @@ snp_table <- function(data_name, index_, clinvar){
           anno_data_mul <- bind_rows(anno_data_mul, anno_data_nonsyn)  
         return(bind_cols(sample_nonsyn, anno_data_mul))
       }, mc.cores = core) %>% bind_rows()
-
+      
       
       print(paste(geneset[[2]][index],"lof", sep = " "))
       lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
@@ -259,5 +266,12 @@ snp_table <- function(data_name, index_, clinvar){
   
   return(geneset_result)
 }
-
+table3_CLSIG <- function(table){
+  result <- mclapply(X = unique.default(table$IID), function(target_IID){
+    select_IID <- table %>% filter(IID == target_IID) %>% select(IID, PHENOTYPE) %>% distinct()
+    clsig <- table %>% filter(IID == target_IID) %>% count(VUS) %>% spread(key = "VUS", value = "n")
+    return(bind_cols(select_IID, clsig))
+  }, mc.cores = detectCores() - 1)
+  return(result)  
+}
 

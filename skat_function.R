@@ -8,7 +8,7 @@ geneset_load <- function(){
   return_list <- list()
   geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O.txt", header = T, 
                          sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
-
+  
   one_hot <- lapply(X=select(geneset_merge, -HGNC, -M2, -'M2-GBA-LRRK2', -'M2_Brain_gene', -'M2_NOT_brain'), 
                     FUN = function(x){ifelse(nchar(x) > 0, 1, 0)}) %>% bind_cols()
   geneset_onehot <- cbind(GENE=geneset_merge$HGNC, one_hot) %>% mutate(GENE = as.character(GENE)) %>% 
@@ -225,9 +225,9 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0){
       
       # 20 MDS
       obj <-SKAT_Null_Model(Phenotype ~ Sex + AGE + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
-                               C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
-                               C19 + C20 + F_MISS, data = FAM, out_type="C", Adjustment = F, n.Resampling = re)
-
+                              C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
+                              C19 + C20 + F_MISS, data = FAM, out_type="C", Adjustment = F, n.Resampling = re)
+      
     }else{
       obj <-SKAT_Null_Model(Phenotype ~ Sex + AGE + C1 + C2 + C3 + C4 + F_MISS,
                             data = FAM, out_type="C", Adjustment = F, n.Resampling = re)
@@ -481,9 +481,9 @@ run_skat_all_common_rare_cov <- function(data_name, flag = "geneset", re = 0){
         }else{
           resample_common_rare <- Get_Resampling_Pvalue(skat_common_rare)[[1]]
           skat_common_rare <- tibble(SetID_common_rare = SSD.INFO$SetInfo[SET_index,2], 
-                                n_marker = out_common_rare$param$n.marker, 
-                                n_marker_test = out_common_rare$param$n.marker.test, 
-                                emprical_pvalue = resample_common_rare, p_value = out_common_rare$p.value)
+                                     n_marker = out_common_rare$param$n.marker, 
+                                     n_marker_test = out_common_rare$param$n.marker.test, 
+                                     emprical_pvalue = resample_common_rare, p_value = out_common_rare$p.value)
         }
         
         return(skat_common_rare)
@@ -500,8 +500,6 @@ run_skat_all_common_rare_cov <- function(data_name, flag = "geneset", re = 0){
   }
   
 }
-
-
 
 ### cov making
 {
