@@ -2,6 +2,7 @@
 library_load <- function(){
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC)
   library(tidyverse);library(progress);  library(parallel)
+  library(tidyselect)
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
 }
@@ -269,9 +270,55 @@ snp_table <- function(data_name, index_, clinvar){
 table3_CLSIG <- function(table){
   result <- mclapply(X = unique.default(table$IID), function(target_IID){
     select_IID <- table %>% filter(IID == target_IID) %>% select(IID, PHENOTYPE) %>% distinct()
-    clsig <- table %>% filter(IID == target_IID) %>% count(VUS) %>% spread(key = "VUS", value = "n")
+    clsig <- table %>% filter(IID == target_IID) %>% count(Clinical_Significance) %>% spread(key = "Clinical_Significance", value = "n")
     return(bind_cols(select_IID, clsig))
   }, mc.cores = detectCores() - 1)
   return(result)  
 }
-
+table3_calc <- function(table_list){
+  result_list <- list()
+  col_name <- colnames(table_list)
+  
+  for(index in 3:ncol(table_list)){
+    temp <- table_list %>% select(col_name[index]) %>% 
+      group_by_all() %>% 
+      summarise(value = n()) %>%
+      mutate_at(1, funs(as.character(.)))
+    
+    if(nrow(temp) > 8){
+      more_value <- temp %>% slice(10:nrow(.)) %>%
+        pull(2) %>% sum()
+      temp <- bind_rows(slice(temp, 1:9), tibble("8+", more_value, .name_repair = ~ c(col_name[index], "value")))
+    }
+    
+    result_list[[index-2]] <- temp 
+  }
+  return(result_list)
+}
+table3_write <- function(table, data_name, MAF){
+  
+  for(index1 in 1:length(table)){
+    geneset_name <- names(table)[index1]
+    result <- tibble(Variant_Number = c("0","1","2","3","4","5","6","7","8","8+"))
+    
+    for(index2 in 1:length(table[[index1]])){
+      phenotype_name <- names(table[[index1]])[index2]
+      for(index3 in 1:length(table[[index1]][[index2]])){
+        temp <- table[[index1]][[index2]][[index3]]
+        col_name <- colnames(temp)[1] %>%
+          str_replace("/", "_..._")
+        
+        if(nrow(temp) != 10){
+          temp <- bind_rows(temp, tibble(value = 0, .rows = 10 - nrow(temp)))
+        }
+        
+        value <- tibble(temp$value, .name_repair = ~c(paste(phenotype_name,"_",colnames(temp)[1])))
+        result <- bind_cols(result, value)
+        
+      } # index3
+    } # index2 case / control
+    
+    write_delim(x = result, delim = "\t", col_names = T, path = paste0(data_name, "_", geneset_name,"_",MAF,"_.txt"))
+    
+  }
+} # endl
