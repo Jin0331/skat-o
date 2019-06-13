@@ -285,10 +285,10 @@ table3_calc <- function(table_list){
       summarise(value = n()) %>%
       mutate_at(1, funs(as.character(.)))
     
-    if(nrow(temp) > 8){
-      more_value <- temp %>% slice(10:nrow(.)) %>%
+    if(nrow(temp) >= 9){
+      more_value <- temp %>% slice(9:nrow(.)) %>%
         pull(2) %>% sum()
-      temp <- bind_rows(slice(temp, 1:9), tibble("8+", more_value, .name_repair = ~ c(col_name[index], "value")))
+      temp <- bind_rows(slice(temp, 1:8), tibble("8+", more_value, .name_repair = ~ c(col_name[index], "value")))
     }
     
     result_list[[index-2]] <- temp 
@@ -299,7 +299,7 @@ table3_write <- function(table, data_name, MAF){
   
   for(index1 in 1:length(table)){
     geneset_name <- names(table)[index1]
-    result <- tibble(Variant_Number = c("0","1","2","3","4","5","6","7","8","8+"))
+    result <- tibble(Variant_Number = c("0","1","2","3","4","5","6","7","8+"))
     
     for(index2 in 1:length(table[[index1]])){
       phenotype_name <- names(table[[index1]])[index2]
@@ -308,17 +308,38 @@ table3_write <- function(table, data_name, MAF){
         col_name <- colnames(temp)[1] %>%
           str_replace("/", "_..._")
         
-        if(nrow(temp) != 10){
-          temp <- bind_rows(temp, tibble(value = 0, .rows = 10 - nrow(temp)))
+        if(nrow(temp) != 9){
+          temp <- bind_rows(temp, tibble(value = 0, .rows = 9 - nrow(temp)))
         }
         
+
+        
         value <- tibble(temp$value, .name_repair = ~c(paste(phenotype_name,"_",colnames(temp)[1])))
+        
+        if(data_name == "IPDGC"){
+          if(phenotype_name == "control"){
+            zero_value <- value %>% pull(1) %>% sum()
+            value[1,1] <- 333 - zero_value + pull(value[1,1], 1)
+          } else{
+            zero_value <- value %>% pull(1) %>% sum()
+            value[1,1] <- 445 - zero_value + pull(value[1,1], 1)
+          }
+        } else {
+          if(phenotype_name == "control"){
+            zero_value <- value %>% pull(1) %>% sum()
+            value[1,1] <- 5689 - zero_value + pull(value[1,1], 1)
+          } else{
+            zero_value <- value %>% pull(1) %>% sum()
+            value[1,1] <- 5384 - zero_value + pull(value[1,1], 1)
+          }
+        }
+        
         result <- bind_cols(result, value)
         
       } # index3
     } # index2 case / control
     
-    write_delim(x = result, delim = "\t", col_names = T, path = paste0(data_name, "_", geneset_name,"_",MAF,"_.txt"))
+    write_delim(x = result, delim = "\t", col_names = T, path = paste0(data_name, "_", geneset_name,"_",MAF,".txt"))
     
   }
 } # endl
