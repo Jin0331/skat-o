@@ -82,7 +82,7 @@ fix_load <- function(data_name){
   return(test_fix)
 } # data_name, "IPDGC", "NeuroX"
 
-geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_){
+geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, CADD_score){
   print("geneset SetID making!!")
   pb <- progress_bar$new(total = length(index_), clear = F)
   pb$tick(0)
@@ -117,7 +117,7 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_){
                                        | ExonicFunc.knownGene ==  "frameshift_deletion"
                                        | ExonicFunc.knownGene ==  "frameshift_insertion"
                                        | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                                       | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37)
+                                       | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED >= CADD_score)
     cadd <- subset(cadd, select = "ID")[,1]
     
     ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
@@ -126,7 +126,7 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_){
                                       | ExonicFunc.knownGene ==  "frameshift_deletion"
                                       | ExonicFunc.knownGene ==  "frameshift_insertion"
                                       | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                                      | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37)
+                                      | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED >= CADD_score)
     
     lof <- subset(lof, select = "ID")[,1]
     
@@ -150,7 +150,7 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_){
   
 } 
 
-gene_setid <- function(index = "default_all", geneset, test_fix, data_name){
+gene_setid <- function(index = "default_all", geneset, test_fix, data_name, CADD_score){
   print("gene SetID making!!")
   if(is.character(index)){ # if 1, all gene
     variant_gene <- unique(geneset[[1]]$GENE[!is.na(geneset[[1]]$GENE)])
@@ -161,7 +161,7 @@ gene_setid <- function(index = "default_all", geneset, test_fix, data_name){
     
     temp <- list()
     for(i in 1:length(variant_gene)){
-      t1 <- subset.data.frame(test_fix, subset = (Gene.knownGene %in% variant_gene[i] & CADD13_PHRED > 12.37))
+      t1 <- subset.data.frame(test_fix, subset = (Gene.knownGene %in% variant_gene[i] & CADD13_PHRED >= CADD_score))
       temp[[i]] <- subset.data.frame(t1, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" ), 
                                      select = c("Gene.knownGene","ID","ID2", "CADD13_PHRED"))
       pb$tick(1)
@@ -188,7 +188,7 @@ gene_setid <- function(index = "default_all", geneset, test_fix, data_name){
     
     temp <- list()
     for(i in 1:length(variant_gene)){
-      t1 <- subset.data.frame(test_fix, subset = (Gene.knownGene %in% variant_gene[i] & CADD13_PHRED > 12.37))
+      t1 <- subset.data.frame(test_fix, subset = (Gene.knownGene %in% variant_gene[i] & CADD13_PHRED >= CADD_score))
       temp[[i]] <- subset.data.frame(t1, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV" ), 
                                      select = c("Gene.knownGene","ID","ID2", "CADD13_PHRED"))
       pb$tick(1)
@@ -317,8 +317,8 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0){
     
     SKAT_result <- 
       parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
-        FAM <- Read_Plink_FAM_Cov(Filename = paste0("../SKAT_data/",data_name,".fam"),
-                                  File_Cov = paste0("../SKAT_data/",data_name,".cov"), Is.binary = FALSE)
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE)
         SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
         
         
@@ -367,7 +367,7 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0){
   
 }
 
-run_skat_all_common_rare_cov <- function(data_name, flag = "geneset", re = 0){
+# run_skat_all_common_rare_cov <- function(data_name, flag = "geneset", re = 0){
   print("SKAT run")
   if(flag == "geneset"){
     

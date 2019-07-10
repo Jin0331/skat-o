@@ -1,8 +1,8 @@
 # library path
 library_load <- function(){
-  library(glue);library(vcfR);library(data.table);library(foreach);library(doMC)
-  library(tidyverse);library(progress);  library(parallel)
-  library(tidyselect)
+  library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(tidyverse);library(progress);  library(parallel)
+  library(tidyselect);library(magrittr)
+  
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
 }
@@ -143,7 +143,7 @@ re_CLNDISDB <- function(CHROMPOS, clinvar){
     return()
 }
 
-snp_table <- function(data_name, index_, clinvar){
+snp_table <- function(data_name = "IPDGC", index_, clinvar){
   core <- detectCores() - 1
   geneset_result <- list()
   geneset <- geneset_load()
@@ -161,16 +161,21 @@ snp_table <- function(data_name, index_, clinvar){
     nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
     lof_dosage <- fread(file = "test_dosage_lof.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
     
+    nonsyn_dosage[is.na(nonsyn_dosage)] <- 0
+    lof_dosage[is.na(lof_dosage)] <- 0
+    
     print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
     nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
       anno_data_nonsyn <- filter(fix, ID == str_split(colnames(nonsyn_dosage)[col_len], pattern = "_")[[1]][1]) %>%
         select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
         mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))
       
-      sample_nonsyn <- select(nonsyn_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% 
+      sample_nonsyn <- select(nonsyn_dosage, c(1:2, col_len)) %>% 
+        # filter(., .[,3] >= 1) %>% 
         mutate(Heterozygous_M = ifelse(.[,3] == 1, TRUE, FALSE),
-               Homozygous_M = ifelse(.[,3] == 2, TRUE, FALSE)) %>%
-        select(., IID, PHENOTYPE, Heterozygous_M, Homozygous_M)
+               Homozygous_M = ifelse(.[,3] == 2, TRUE, FALSE),
+               Heterozygous = ifelse(.[,3] == 0, TRUE, FALSE)) %>%
+        select(., IID, PHENOTYPE, Heterozygous, Heterozygous_M, Homozygous_M)
       
       anno_data_mul <- tibble(.rows = 0)
       if(nrow(sample_nonsyn) == 0) return(anno_data_mul)
@@ -186,10 +191,12 @@ snp_table <- function(data_name, index_, clinvar){
         select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
         mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))
       
-      sample_lof <- select(lof_dosage, c(1:2, col_len)) %>% filter(., .[,3] >= 1) %>% 
+      sample_lof <- select(lof_dosage, c(1:2, col_len)) %>% 
+        # filter(., .[,3] >= 1) %>% 
         mutate(Heterozygous_M = ifelse(.[,3] == 1, TRUE, FALSE),
-               Homozygous_M = ifelse(.[,3] == 2, TRUE, FALSE)) %>%
-        select(., IID, PHENOTYPE, Heterozygous_M, Homozygous_M)
+               Homozygous_M = ifelse(.[,3] == 2, TRUE, FALSE),
+               Heterozygous = ifelse(.[,3] == 0, TRUE, FALSE)) %>%
+        select(., IID, PHENOTYPE, Heterozygous, Heterozygous_M, Homozygous_M)
       
       anno_data_mul <- tibble(.rows = 0)
       if(nrow(sample_lof) == 0) return(anno_data_mul)
@@ -219,7 +226,20 @@ snp_table <- function(data_name, index_, clinvar){
 table3_CLSIG <- function(table){
   result <- mclapply(X = unique.default(table$IID), function(target_IID){
     select_IID <- table %>% filter(IID == target_IID) %>% select(IID, PHENOTYPE) %>% distinct()
-    clsig <- table %>% filter(IID == target_IID) %>% count(Clinical_Significance) %>% spread(key = "Clinical_Significance", value = "n")
+    
+    clsig_homo <- NULL
+    # zigosity, homo count * 2, hetero * 1
+    if(nrow(filter(table, IID == target_IID, Homozygous_M == T)) > 0){
+      clsig_homo <- table %>% filter(IID == target_IID, Homozygous_M == T) %>%  
+        count(Clinical_Significance) %>% spread(key = "Clinical_Significance", value = "n") %>%
+        apply(., MARGIN = 2, FUN = function(x) x * 2)
+    }
+    clsig_hetero <- table %>% filter(IID == target_IID, Heterozygous_M == T) %>% 
+      count(Clinical_Significance) %>% spread(key = "Clinical_Significance", value = "n")  
+    
+    clsig <- bind_rows(clsig_homo, clsig_hetero);clsig[is.na(clsig)] <- 0
+    clsig <- clsig %>% apply(., MARGIN = 2, sum) %>% t() %>% as_tibble()
+    
     return(bind_cols(select_IID, clsig))
   }, mc.cores = detectCores() - 1)
   return(result)  
@@ -228,70 +248,122 @@ table3_calc <- function(table_list){
   result_list <- list()
   col_name <- colnames(table_list)
   
+  # if(nrow(table_list) == 0) return(tibble())
+  
   for(index in 3:ncol(table_list)){
     temp <- table_list %>% select(col_name[index]) %>% 
       group_by_all() %>% 
       summarise(value = n()) %>%
       mutate_at(1, funs(as.character(.)))
     
-    if(nrow(temp) >= 9){
-      more_value <- temp %>% slice(9:nrow(.)) %>%
-        pull(2) %>% sum()
-      temp <- bind_rows(slice(temp, 1:8), tibble("8+", more_value, .name_repair = ~ c(col_name[index], "value")))
+    if(nrow(temp) == 0){
+      result <- tibble(rep(0,9), .name_repair = ~col_name[index])
+    } else{
+      zero_row <- temp[,1] %in% "0"
+      if(zero_row[1] == F)
+        temp <- bind_rows(tibble("0", 0, .name_repair = ~c(col_name[index], "value")), temp)
+      
+      if(nrow(temp) <= 8){
+        temp <- tibble(c(as.character(0:7), "8+"), .name_repair = ~c(col_name[index])) %>% 
+          left_join(x = ., y = temp, by = col_name[index])
+      } else if(nrow(temp) >= 9){
+        more_value <- temp %>% slice(9:nrow(.)) %>%
+          pull(2) %>% sum()
+        temp <- bind_rows(slice(temp, 1:8), tibble("8+", more_value, .name_repair = ~ c(col_name[index], "value")))
+      }
+      
+      temp$value[is.na(temp$value)] <- 0
+      result <- temp[2];colnames(result) <- col_name[index]
     }
     
-    result_list[[index-2]] <- temp 
+    result_list[[index-2]] <- result
   }
   return(result_list)
 }
-table3_write <- function(table, data_name, MAF){
+table3_ver_1 <- function(data_list, type = "Pathogenic", geneset_name, MAF_value = 0.03, CADD_score = 20){
+  index <- which(names(data_list) == geneset_name)
   
-  for(index1 in 1:length(table)){
-    geneset_name <- names(table)[index1]
-    result <- tibble(Variant_Number = c("0","1","2","3","4","5","6","7","8+"))
+  temp <- data_list[[index]]
+  temp$Clinical_Significance <- str_replace(temp$Clinical_Significance,
+                                            pattern = "(^Pathogenic$)|^(Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic$)",
+                                            replacement = "Pathogenic_ALL")
+  temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
+  
+  if(type == "Pathogenic"){
+    temp2 <- temp %>% arrange(IID) %>% 
+      filter(MAF <= MAF_value, Heterozygous != TRUE, Clinical_Significance == "Pathogenic_ALL") %>%
+      table3_CLSIG() %>% bind_rows()
+    temp2[is.na(temp2)] <- 0
     
-    for(index2 in 1:length(table[[index1]])){
-      phenotype_name <- names(table[[index1]])[index2]
-      for(index3 in 1:length(table[[index1]][[index2]])){
-        temp <- table[[index1]][[index2]][[index3]]
-        col_name <- colnames(temp)[1] %>%
-          str_replace("/", "_..._")
-        
-        if(nrow(temp) != 9){
-          temp <- bind_rows(temp, tibble(value = 0, .rows = 9 - nrow(temp)))
-        }
-        
-
-        
-        value <- tibble(temp$value, .name_repair = ~c(paste(phenotype_name,"_",colnames(temp)[1])))
-        
-        if(data_name == "IPDGC"){
-          if(phenotype_name == "control"){
-            zero_value <- value %>% pull(1) %>% sum()
-            value[1,1] <- 333 - zero_value + pull(value[1,1], 1)
-          } else{
-            zero_value <- value %>% pull(1) %>% sum()
-            value[1,1] <- 445 - zero_value + pull(value[1,1], 1)
-          }
-        } else {
-          if(phenotype_name == "control"){
-            zero_value <- value %>% pull(1) %>% sum()
-            value[1,1] <- 5689 - zero_value + pull(value[1,1], 1)
-          } else{
-            zero_value <- value %>% pull(1) %>% sum()
-            value[1,1] <- 5384 - zero_value + pull(value[1,1], 1)
-          }
-        }
-        
-        result <- bind_cols(result, value)
-        
-      } # index3
-    } # index2 case / control
+    control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+      rename(Pathogenic_ALL_control = Pathogenic_ALL) %>%
+      table3_calc() 
+    case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+      rename(Pathogenic_ALL_case = Pathogenic_ALL) %>%
+      table3_calc() 
     
-    write_delim(x = result, delim = "\t", col_names = T, path = paste0(data_name, "_", geneset_name,"_",MAF,".txt"))
+  } else if(type == "LoF"){
+    temp2 <- temp %>% arrange(IID) %>% 
+      filter(MAF <= MAF_value, Func == "LoF", Heterozygous != TRUE, Clinical_Significance != "Pathogenic_ALL") %>%
+      table3_CLSIG() %>% bind_rows()
+    temp2[is.na(temp2)] <- 0
     
+    lof_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2];colnames(lof_sum) <- "LoF"
+    temp2 <- bind_cols(temp2[, 1:2], lof_sum)
+    
+    control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+      rename(LoF_control = LoF) %>%
+      table3_calc() 
+    case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+      rename(LoF_case = LoF) %>%
+      table3_calc() 
+    
+  }else if(type == "CADD_MAF"){
+    temp2 <- temp %>% arrange(IID) %>% 
+      filter(MAF <= MAF_value, Heterozygous != TRUE, CADD13_PHRED <= CADD_score, Clinical_Significance != "Pathogenic_ALL") %>%
+      table3_CLSIG() %>% bind_rows()
+    temp2[is.na(temp2)] <- 0
+    
+    cadd_maf_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2]
+    colnames(cadd_maf_sum) <- "cadd_maf"
+    temp2 <- bind_cols(temp2[, 1:2], cadd_maf_sum)
+    
+    control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+      rename(CADD_MAF_control = cadd_maf) %>%
+      table3_calc() 
+    
+    case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+      rename(CADD_MAF_case = cadd_maf) %>%
+      table3_calc() 
+    
+    
+    
+  } else if(type == "ALL"){ # not provide
+    temp2 <- temp %>% arrange(IID) %>% filter(MAF <= 0.03, Heterozygous != TRUE) %>%
+      table3_CLSIG() %>% bind_rows()
+    temp2[is.na(temp2)] <- 0
+    
+    all_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2];colnames(all_sum) <- "ALL"
+    temp2 <- bind_cols(temp2[, 1:2], all_sum)
+    
+    control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+      rename(ALL_control = ALL) %>%
+      table3_calc() 
+    case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+      rename(ALL_case = ALL) %>%
+      table3_calc() 
   }
-} # endl
+  
+  
+  result <- bind_cols(case, control) 
+  
+  if(result[1,1] == 0)
+    result[1,1] <- 445 - result[,1] %>% sum
+  if(result[1,2] == 0)
+    result[1,2] <- 333 - result[,2] %>% sum
+  
+  return(result)
+}
 
 snp_table_WES <- function(data_name = "IPDGC", index_, clinvar){
   core <- detectCores() - 1
@@ -317,11 +389,12 @@ snp_table_WES <- function(data_name = "IPDGC", index_, clinvar){
         select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
         mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))},mc.cores = core) %>%
       bind_rows()
-  
+    
+    
     print(paste(geneset[[2]][index],"lof", sep = " "))
     lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
       anno_data_lof <- filter(fix, ID == str_split(colnames(lof_dosage)[col_len], pattern = "_")[[1]][1]) %>%
-        select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
+        select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
         mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))}, mc.cores = core) %>% 
       bind_rows()
     
@@ -343,3 +416,87 @@ snp_table_WES <- function(data_name = "IPDGC", index_, clinvar){
 
 
 
+{
+  # table3_ver_1 <- function(data_list, type = "Pathogenic", geneset_name, MAF_value = 0.03, CADD_score = 20){
+  #   index <- which(names(data_list) == geneset_name)
+  #   
+  #   temp <- data_list[[index]]
+  #   temp$Clinical_Significance <- str_replace(temp$Clinical_Significance,
+  #                                             pattern = "(^Pathogenic$)|^(Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic$)",
+  #                                             replacement = "Pathogenic_ALL")
+  #   temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
+  #   
+  #   if(type == "Pathogenic"){
+  #     temp2 <- temp %>% arrange(IID) %>% filter(MAF <= MAF_value, Clinical_Significance == "Pathogenic_ALL") %>%
+  #       table3_CLSIG() %>% bind_rows()
+  #     temp2[is.na(temp2)] <- 0
+  #     
+  #     control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+  #       rename(Pathogenic_ALL_control = Pathogenic_ALL) %>%
+  #       table3_calc() 
+  #     case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+  #       rename(Pathogenic_ALL_case = Pathogenic_ALL) %>%
+  #       table3_calc() 
+  #     
+  #   } else if(type == "LoF"){
+  #     temp2 <- temp %>% arrange(IID) %>% filter(MAF <= MAF_value, Func == "LoF", Clinical_Significance != "Pathogenic_ALL") %>%
+  #       table3_CLSIG() %>% bind_rows()
+  #     temp2[is.na(temp2)] <- 0
+  #     
+  #     lof_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2];colnames(lof_sum) <- "LoF"
+  #     temp2 <- bind_cols(temp2[, 1:2], lof_sum)
+  #     
+  #     control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+  #       rename(LoF_control = LoF) %>%
+  #       table3_calc() 
+  #     case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+  #       rename(LoF_case = LoF) %>%
+  #       table3_calc() 
+  #     
+  #   }else if(type == "CADD_MAF"){
+  #     temp2 <- temp %>% arrange(IID) %>% filter(MAF <= MAF_value, CADD13_PHRED <= CADD_score, Clinical_Significance != "Pathogenic_ALL") %>%
+  #       table3_CLSIG() %>% bind_rows()
+  #     temp2[is.na(temp2)] <- 0
+  #     
+  #     cadd_maf_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2]
+  #     colnames(cadd_maf_sum) <- "cadd_maf"
+  #     temp2 <- bind_cols(temp2[, 1:2], cadd_maf_sum)
+  #     
+  #     control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+  #       rename(CADD_MAF_control = cadd_maf) %>%
+  #       table3_calc() 
+  #     
+  #     case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+  #       rename(CADD_MAF_case = cadd_maf) %>%
+  #       table3_calc() 
+  #     
+  #     
+  #     
+  #   } else if(type == "ALL"){ # not provide
+  #     temp2 <- temp %>% arrange(IID) %>% filter(MAF <= 0.03) %>%
+  #       table3_CLSIG() %>% bind_rows()
+  #     temp2[is.na(temp2)] <- 0
+  #     
+  #     all_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2];colnames(all_sum) <- "ALL"
+  #     temp2 <- bind_cols(temp2[, 1:2], all_sum)
+  #     
+  #     control <- temp2 %>% filter(PHENOTYPE == 1) %>%
+  #       rename(ALL_control = ALL) %>%
+  #       table3_calc() 
+  #     case <- temp2 %>% filter(PHENOTYPE == 2) %>%
+  #       rename(ALL_case = ALL) %>%
+  #       table3_calc() 
+  #   }
+  #   
+  #   
+  #   result <- bind_cols(tibble(rowname = c("0","1","2","3","4","5","6","7","8+")), control, case) %>% 
+  #     column_to_rownames(., var = "rowname")
+  #   
+  #   if(result[1,1] == 0)
+  #     result[1,1] <- 333 - result[,1] %>% sum
+  #   if(result[1,2] == 0)
+  #     result[1,2] <- 445 - result[,2] %>% sum
+  #   
+  #   return(result)
+  # }
+}
