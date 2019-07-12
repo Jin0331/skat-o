@@ -6,102 +6,122 @@ clinvar <- clinvar_load()
 
 # ## TABLE 1 & 2
 {
-#   # geneset load
-#   geneset <- geneset_load()
-# 
-#   # case control
-#   FAM<- data.table::fread(file = "IPDGC.fam", header = F)
-#   FAM<- data.table::fread(file = "NeuroX.fam", header = F)
-# 
-#   BIM <- data.table::fread(file = "NeuroX.bim", header = F)
-# 
-#   FAM %>% filter(V6 == 2) %>% nrow()
-# 
-#   target_gene <- c()
-# 
-#   for(gene in index)
-#     target_gene <- c(target_gene, geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])])
-#   variant_gene <- unique.default(target_gene)
-# 
-#   IPDGC_gene <- NULL;NeuroX_gene <- NULL;temp <- NULL
-#   for(i in 1:length(variant_gene)){
-#     temp <- subset.data.frame(IPDGC_FIX,
-#                               subset = (Gene.knownGene %in% variant_gene[i]))
-#     IPDGC_gene <- bind_rows(IPDGC_gene, temp)
-#   }
-#   for(i in 1:length(variant_gene)){
-#     temp <- subset.data.frame(NeuroX_Fix,
-#                               subset = (Gene.knownGene %in% variant_gene[i]))
-#     NeuroX_gene <- bind_rows(NeuroX_gene, temp)
-#   }
-# 
-# 
-# 
-#   IPDGC_gene %>% filter(ExonicFunc.knownGene == "nonsynonymous_SNV"
-#                         | ExonicFunc.knownGene == "stopgain"
-#                         | ExonicFunc.knownGene ==  "stoploss"
-#                         | ExonicFunc.knownGene ==  "frameshift_deletion"
-#                         | ExonicFunc.knownGene ==  "frameshift_insertion"
-#                         | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-#                         | ExonicFunc.knownGene ==  "splicing") %>% nrow()
-# 
-#   IPDGC_gene %>% filter(ExonicFunc.knownGene == "stopgain"
-#                         | ExonicFunc.knownGene ==  "stoploss"
-#                         | ExonicFunc.knownGene ==  "frameshift_deletion"
-#                         | ExonicFunc.knownGene ==  "frameshift_insertion"
-#                         | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-#                         | ExonicFunc.knownGene ==  "splicing")  %>%
-#     filter(MAF < 0.03) %>%
-#     nrow()
-# 
-# }
-# 
-# ## TABLE 2
-# for(gene in index){ # 2:length(col_name), c(2,3,7,16,17)
-#   geneset_ <- geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])]
-#   variant <- list()
-#   ## Parkinson geneset variant
-#   for(i in 1:length(geneset_)){
-#     variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset_[i] & Func.knownGene == "exonic")),
-#                            select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED"))
-#   }
-#   variant <- bind_rows(variant)
-# 
-#   ### 1. nonsynonymous geneset
-#   print(paste(gene, "non-syn", sep = " "))
-#   nonsynonymous <- subset(variant, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-#                                              | ExonicFunc.knownGene == "stopgain"
-#                                              | ExonicFunc.knownGene ==  "stoploss"
-#                                              | ExonicFunc.knownGene ==  "frameshift_deletion"
-#                                              | ExonicFunc.knownGene ==  "frameshift_insertion"
-#                                              | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-#                                              | ExonicFunc.knownGene ==  "splicing"
-#   )) %>% nrow() %>% print()
-# 
-# 
-#   ### 2. CADD > 12.37 variant
-#   print(paste(gene, "cadd", sep = " "))
-#   cadd <- subset(variant, subset = ( ExonicFunc.knownGene == "nonsynonymous_SNV"
-#                                      | ExonicFunc.knownGene == "stopgain"
-#                                      | ExonicFunc.knownGene ==  "stoploss"
-#                                      | ExonicFunc.knownGene ==  "frameshift_deletion"
-#                                      | ExonicFunc.knownGene ==  "frameshift_insertion"
-#                                      | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-#                                      | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37) %>%
-#     nrow() %>% print()
-# 
-#   ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
-#   print(paste(gene, "lof", sep = " "))
-#   lof <- subset(variant, subset = ( ExonicFunc.knownGene == "stopgain"
-#                                     | ExonicFunc.knownGene ==  "stoploss"
-#                                     | ExonicFunc.knownGene ==  "frameshift_deletion"
-#                                     | ExonicFunc.knownGene ==  "frameshift_insertion"
-#                                     | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-#                                     | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37) %>%
-#     nrow() %>% print()
+  
 
+  
+  # geneset load
+  geneset <- geneset_load()
+
+  # case control
+  FAM <- data.table::fread(file = "/home/jinoo/skat-o/SKAT_data/IPDGC.fam", header = F)
+  BIM <- data.table::fread(file = "/home/jinoo/skat-o/SKAT_data/IPDGC.bim", header = F)
+  
+  FAM <- data.table::fread(file = "/home/jinoo/skat-o/SKAT_data/NeuroX.fam", header = F)
+  BIM <- data.table::fread(file = "/home/jinoo/skat-o/SKAT_data/NeuroX.bim", header = F)
+
+  FAM %>% filter(V6 == 2) %>% nrow()
+
+  target_gene <- c()
+
+  for(gene in index)
+    target_gene <- c(target_gene, geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])])
+  variant_gene <- unique.default(target_gene)
+
+  IPDGC_gene <- NULL;NeuroX_gene <- NULL;temp <- NULL
+  for(i in 1:length(variant_gene)){
+    temp <- subset.data.frame(IPDGC_FIX,
+                              subset = (Gene.knownGene %in% variant_gene[i]))
+    IPDGC_gene <- bind_rows(IPDGC_gene, temp)
+  }
+  for(i in 1:length(variant_gene)){
+    temp <- subset.data.frame(NeuroX_Fix,
+                              subset = (Gene.knownGene %in% variant_gene[i]))
+    NeuroX_gene <- bind_rows(NeuroX_gene, temp)
+  }
+
+
+
+  IPDGC_gene %>% filter(ExonicFunc.knownGene == "nonsynonymous_SNV"
+                        | ExonicFunc.knownGene == "stopgain"
+                        | ExonicFunc.knownGene ==  "stoploss"
+                        | ExonicFunc.knownGene ==  "frameshift_deletion"
+                        | ExonicFunc.knownGene ==  "frameshift_insertion"
+                        | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+                        | ExonicFunc.knownGene ==  "splicing") %>% nrow()
+
+  IPDGC_gene %>% filter(ExonicFunc.knownGene == "stopgain"
+                        | ExonicFunc.knownGene ==  "stoploss"
+                        | ExonicFunc.knownGene ==  "frameshift_deletion"
+                        | ExonicFunc.knownGene ==  "frameshift_insertion"
+                        | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+                        | ExonicFunc.knownGene ==  "splicing")  %>%
+    filter(MAF < 0.03) %>%
+    nrow()
 
 }
+
+## TABLE 2
+
+test_fix <- WES_merge_fix <- fix_load("WES_merge_row")
+test_fix <- WES_QC_fix <- fix_load("IPDGC")
+test_fix <- NeuroX_QC_fix <- fix_load("NeuroX_row")
+test_fix <- NeuroX_QC_fix <- fix_load("NeuroX")
+geneset <- geneset_load()
+
+# 3 = O2, 6 = PARK, 8 = NONPARK, 22 = CHD
+
+  gene <- 3
+  geneset_ <- geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])]
+  variant <- list()
+  
+  
+  # row_all_variants
+  for(i in 1:length(geneset_)){
+    variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset_[i])))
+  }
+  
+  bind_rows(variant) %>% nrow()
+  
+  ## Parkinson geneset variant
+  for(i in 1:length(geneset_)){
+    variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset_[i] & Func.knownGene == "exonic")),
+                           select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED","MAF"))
+  }
+  variant <- bind_rows(variant)
+
+  ### 1. nonsynonymous geneset
+  print(paste(gene, "non-syn", sep = " "))
+  nonsynonymous <- subset(variant, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
+                                             | ExonicFunc.knownGene == "stopgain"
+                                             | ExonicFunc.knownGene ==  "stoploss"
+                                             | ExonicFunc.knownGene ==  "frameshift_deletion"
+                                             | ExonicFunc.knownGene ==  "frameshift_insertion"
+                                             | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+                                             | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01 & CADD13_PHRED > 20) %>%
+    nrow() %>% print()
+
+
+  # ### 2. CADD > 12.37 variant
+  # print(paste(gene, "cadd", sep = " "))
+  # cadd <- subset(variant, subset = ( ExonicFunc.knownGene == "nonsynonymous_SNV"
+  #                                    | ExonicFunc.knownGene == "stopgain"
+  #                                    | ExonicFunc.knownGene ==  "stoploss"
+  #                                    | ExonicFunc.knownGene ==  "frameshift_deletion"
+  #                                    | ExonicFunc.knownGene ==  "frameshift_insertion"
+  #                                    | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+  #                                    | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37) %>%
+  #   nrow() %>% print()
+
+  ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
+  print(paste(gene, "lof", sep = " "))
+  
+  lof <- subset(variant, subset = ( ExonicFunc.knownGene == "stopgain"
+                                    | ExonicFunc.knownGene ==  "stoploss"
+                                    | ExonicFunc.knownGene ==  "frameshift_deletion"
+                                    | ExonicFunc.knownGene ==  "frameshift_insertion"
+                                    | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+                                    | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01) %>%
+    nrow() %>% print()
 
 # TABLE 3 WES all variant, CADD score upload & #CHROM
 {
@@ -120,8 +140,9 @@ clinvar <- clinvar_load()
 }
 
 # TABLE 3 preprocessing per individual
-WES_table <- snp_table_WES(index_ = c(3,6,8), clinvar = clinvar)
-ipdgc_result <- snp_table(data_name = "IPDGC", index_ = c(3,6,8,17), clinvar = clinvar)
+WES_table <- snp_table_ALL(index_ = c(3,6,8), clinvar = clinvar)
+NeuroX_table <- snp_table_ALL(index_ = c(3,6,8), clinvar = clinvar, data_name = "NeuroX")
+ipdgc_result <- snp_table(data_name = "IPDGC", index_ = c(3,6,8), clinvar = clinvar)
 
 # TABLE 3
 ## Pathogenic, LoF, CADD_MAF
@@ -142,14 +163,6 @@ table3_result_O2_NONPARK <- table3_ver_1(data_list = ipdgc_result, type = "Patho
   bind_cols(., table3_ver_1(data_list = ipdgc_result, type = "CADD_MAF", geneset_name = "O2_NONPARK", MAF_value = 0.03)) %>%
   bind_cols(., table3_ver_1(data_list = ipdgc_result, type = "CADD_MAF", geneset_name = "O2_NONPARK", MAF_value = 0.01)) %>%
   bind_cols(tibble(rowname = c("0","1","2","3","4","5","6","7","8+")), .) %>% column_to_rownames(., var = "rowname")
-
-
-
-
-
-
-
-
 
 {
   # ipdgc_table3_003 <- map(.x = ipdgc_result, .f = function(x){

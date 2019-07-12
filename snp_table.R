@@ -65,25 +65,60 @@ geneset_load <- function(){
 }
 fix_load <- function(data_name){
   print(paste0(data_name, " fix load!"))
-  test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
-    as_tibble()
-  test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
-  test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
-  test_fix <- test_fix %>% mutate(ID2 = paste(CHROM, POS, sep = ":"))
   
-  test_id <- test_fix$ID;test_ch <- test_fix$CHROM;test_pos <- test_fix$POS
-  for(change in 1:length(test_id)){
-    if(test_id[change] == ""){
-      test_id[change] <- paste0(test_ch[change], ":", test_pos[change])
+  if(data_name == "IPDGC"){
+    test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
+      as_tibble() %>% select(-CADD13_RawScore, -CADD13_PHRED)
+    
+    # include indel
+    path <- list.files(path = "/home/jinoo/skat-o/SKAT_data/indel_cadd/", full.names = T)
+    indel <- lapply(path, FUN = function(x){
+      temp <- fread(file = x, header = T, sep = "\t", stringsAsFactors = F) %>% 
+        mutate_at(1, funs(as.character(.)))
+    }) %>% bind_rows()
+    
+    indel <- indel %>% rename(CHROM = `#CHROM`, CADD13_RawScore = RawScore,CADD13_PHRED = PHRED)
+    
+    test_fix <- left_join(x = test_fix, y = indel, by = c("CHROM","POS","REF","ALT")) 
+    
+    test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
+    test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
+    test_fix <- test_fix %>% mutate(ID2 = paste(CHROM, POS, sep = ":"))
+    
+    test_id <- test_fix$ID;test_ch <- test_fix$CHROM;test_pos <- test_fix$POS
+    for(change in 1:length(test_id)){
+      if(test_id[change] == ""){
+        test_id[change] <- paste0(test_ch[change], ":", test_pos[change])
+      }
     }
+    test_fix$ID <- test_id
+    
+    freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+      rename(ID = SNP)
+    test_fix <- left_join(x = test_fix, y = freq, by = "ID")
+    return(test_fix)
+    
+  } else{
+    test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
+      as_tibble()
+    test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
+    test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
+    test_fix <- test_fix %>% mutate(ID2 = paste(CHROM, POS, sep = ":"))
+    
+    test_id <- test_fix$ID;test_ch <- test_fix$CHROM;test_pos <- test_fix$POS
+    for(change in 1:length(test_id)){
+      if(test_id[change] == ""){
+        test_id[change] <- paste0(test_ch[change], ":", test_pos[change])
+      }
+    }
+    test_fix$ID <- test_id
+    
+    freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+      rename(ID = SNP)
+    test_fix <- left_join(x = test_fix, y = freq, by = "ID")
+    
+    return(test_fix)
   }
-  test_fix$ID <- test_id
-  
-  freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
-    rename(ID = SNP)
-  test_fix <- left_join(x = test_fix, y = freq, by = "ID")
-  
-  return(test_fix)
 } # data_name, "IPDGC", "NeuroX"
 geneset_extract <- function(geneset_merge, col_name, test_fix, data_name, index_){
   print("geneset SetID making!!")
@@ -148,7 +183,7 @@ snp_table <- function(data_name = "IPDGC", index_, clinvar){
   geneset_result <- list()
   geneset <- geneset_load()
   fix <- fix_load(data_name)
-  # clinvar <- clinvar_load()
+  
   
   geneset_extract(geneset[[1]], geneset[[2]], fix, data_name, index_)
   
@@ -320,12 +355,11 @@ table3_ver_1 <- function(data_list, type = "Pathogenic", geneset_name, MAF_value
     
   }else if(type == "CADD_MAF"){
     temp2 <- temp %>% arrange(IID) %>% 
-      filter(MAF <= MAF_value, Heterozygous != TRUE, CADD13_PHRED <= CADD_score, Clinical_Significance != "Pathogenic_ALL") %>%
+      filter(MAF <= MAF_value, Heterozygous != TRUE, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL") %>%
       table3_CLSIG() %>% bind_rows()
     temp2[is.na(temp2)] <- 0
     
-    cadd_maf_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2]
-    colnames(cadd_maf_sum) <- "cadd_maf"
+    cadd_maf_sum <- temp2[, 3:ncol(temp2)] %>% apply(., MARGIN = 1, sum) %>% enframe() %>% .[2];colnames(cadd_maf_sum) <- "cadd_maf"
     temp2 <- bind_cols(temp2[, 1:2], cadd_maf_sum)
     
     control <- temp2 %>% filter(PHENOTYPE == 1) %>%
@@ -365,48 +399,91 @@ table3_ver_1 <- function(data_list, type = "Pathogenic", geneset_name, MAF_value
   return(result)
 }
 
-snp_table_WES <- function(data_name = "IPDGC", index_, clinvar){
+snp_table_ALL <- function(data_name = "IPDGC", index_, clinvar){
   core <- detectCores() - 1
   geneset_result <- list()
   geneset <- geneset_load()
   fix <- fix_load(data_name)
-  # clinvar <- clinvar_load()
   
   geneset_extract(geneset[[1]], geneset[[2]], fix, data_name, index_)
   
-  for(index in index_){
-    system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
-                data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
-    system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof", 
-                data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+  if(data_name == "IPDGC"){
+    for(index in index_){
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
+                  data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof", 
+                  data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      
+      nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
+      lof_dosage <- fread(file = "test_dosage_lof.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
+      
+      nonsyn_dosage[is.na(nonsyn_dosage)] <- 0
+      lof_dosage[is.na(lof_dosage)] <- 0
+      
+      print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
+      nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
+        anno_data_nonsyn <- filter(fix, ID == str_split(colnames(nonsyn_dosage)[col_len], pattern = "_")[[1]][1]) %>%
+          select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))},mc.cores = core) %>%
+        bind_rows()
+      
+      
+      print(paste(geneset[[2]][index],"lof", sep = " "))
+      lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
+        anno_data_lof <- filter(fix, ID == str_split(colnames(lof_dosage)[col_len], pattern = "_")[[1]][1]) %>%
+          select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))}, mc.cores = core) %>% 
+        bind_rows()
+      
+      nonsyn_result <- nonsyn_result %>%
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               geneset = geneset[[2]][index], Func = "Nonsynonymous")
+      
+      lof_result <- lof_result %>%
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               geneset = geneset[[2]][index], Func = "LoF")
+      geneset_result[[geneset[[2]][index]]] <- bind_rows(nonsyn_result, lof_result)
+    }
     
-    nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
-    lof_dosage <- fread(file = "test_dosage_lof.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
+  } else{
     
-    print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
-    nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
-      anno_data_nonsyn <- filter(fix, ID == str_split(colnames(nonsyn_dosage)[col_len], pattern = "_")[[1]][1]) %>%
-        select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
-        mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))},mc.cores = core) %>%
-      bind_rows()
-    
-    
+    for(index in index_){
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
+                  data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof", 
+                  data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      
+      nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
+      lof_dosage <- fread(file = "test_dosage_lof.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
+      
+      nonsyn_dosage[is.na(nonsyn_dosage)] <- 0
+      lof_dosage[is.na(lof_dosage)] <- 0
+      
+      print(paste(geneset[[2]][index],"nonsynonymous", sep = " "))
+      nonsyn_result <- mclapply(X = 3:ncol(nonsyn_dosage), FUN = function(col_len){
+        anno_data_nonsyn <- filter(fix, ID == str_sub(colnames(nonsyn_dosage)[col_len], end = -3)) %>%
+          select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))},mc.cores = core) %>%
+        bind_rows()
+      
+      
     print(paste(geneset[[2]][index],"lof", sep = " "))
-    lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
-      anno_data_lof <- filter(fix, ID == str_split(colnames(lof_dosage)[col_len], pattern = "_")[[1]][1]) %>%
-        select(., CHROM, POS, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
-        mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))}, mc.cores = core) %>% 
-      bind_rows()
+      lof_result <- mclapply(X = 3:ncol(lof_dosage), FUN = function(col_len){
+        anno_data_lof <- filter(fix, ID == str_sub(colnames(lof_dosage)[col_len], end = -3)) %>%
+          select(., CHROM, POS, REF, ALT, ID, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
+          mutate(Clinical_Significance = re_CLNSIG(paste(CHROM, POS, sep = ":"), clinvar))}, mc.cores = core) %>% 
+        bind_rows()
+      
+      nonsyn_result <- nonsyn_result %>%
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               geneset = geneset[[2]][index], Func = "Nonsynonymous")
+      
+      lof_result <- lof_result %>%
+        mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
+               geneset = geneset[[2]][index], Func = "LoF")
+      geneset_result[[geneset[[2]][index]]] <- bind_rows(nonsyn_result, lof_result)
+    }
     
-    nonsyn_result <- nonsyn_result %>%
-      mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
-             geneset = geneset[[2]][index], Func = "Nonsynonymous")
-    
-    lof_result <- lof_result %>%
-      mutate(., AnnotationClinvar = ifelse(paste(CHROM,POS,sep = ":") %in% clinvar$CHROMPOS, "TRUE","FALSE"),
-             geneset = geneset[[2]][index], Func = "LoF")
-    
-    geneset_result[[geneset[[2]][index]]] <- bind_rows(nonsyn_result, lof_result)
   }
   
   system("rm -rf *.log");system("rm -rf *.raw");system("rm -rf *.hh")

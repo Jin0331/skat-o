@@ -61,6 +61,40 @@ geneset_load <- function(){
 
 fix_load <- function(data_name){
   print(paste0(data_name, " fix load!"))
+  
+  if(data_name == "IPDGC"){
+    test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
+      as_tibble() %>% select(-CADD13_RawScore, -CADD13_PHRED)
+    
+    # include indel
+    path <- list.files(path = "/home/jinoo/skat-o/SKAT_data/indel_cadd/", full.names = T)
+    indel <- lapply(path, FUN = function(x){
+      temp <- fread(file = x, header = T, sep = "\t", stringsAsFactors = F) %>% 
+        mutate_at(1, funs(as.character(.)))
+    }) %>% bind_rows()
+    
+    indel <- indel %>% rename(CHROM = `#CHROM`, CADD13_RawScore = RawScore,CADD13_PHRED = PHRED)
+    
+    test_fix <- left_join(x = test_fix, y = indel, by = c("CHROM","POS","REF","ALT")) 
+    
+    test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
+    test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
+    test_fix <- test_fix %>% mutate(ID2 = paste(CHROM, POS, sep = ":"))
+    
+    test_id <- test_fix$ID;test_ch <- test_fix$CHROM;test_pos <- test_fix$POS
+    for(change in 1:length(test_id)){
+      if(test_id[change] == ""){
+        test_id[change] <- paste0(test_ch[change], ":", test_pos[change])
+      }
+    }
+    test_fix$ID <- test_id
+    
+    freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+      rename(ID = SNP)
+    test_fix <- left_join(x = test_fix, y = freq, by = "ID")
+    return(test_fix)
+    
+  } else{
   test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
     as_tibble()
   test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
@@ -80,6 +114,7 @@ fix_load <- function(data_name){
   test_fix <- left_join(x = test_fix, y = freq, by = "ID")
   
   return(test_fix)
+  }
 } # data_name, "IPDGC", "NeuroX"
 
 geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, CADD_score){
@@ -285,8 +320,6 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0){
     fwrite(x = results, file = paste0(data_name,"_result_cov_all.txt"), col.names = T, row.names = F, sep = "\t")
     Close_SSD()
     
-    
-    
   } else {
     Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
                        File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
@@ -367,7 +400,7 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0){
   
 }
 
-# run_skat_all_common_rare_cov <- function(data_name, flag = "geneset", re = 0){
+run_skat_all_common_rare_cov <- function(data_name, flag = "geneset", re = 0){
   print("SKAT run")
   if(flag == "geneset"){
     
