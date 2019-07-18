@@ -33,8 +33,10 @@ geneset_load <- function(){
   # CHD, DEG adding
   
   CHD <- fread(file = "/home/jinoo/skat-o/SKAT_data/CHD_0424.txt", header = T, 
-               sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.)), CHD = NA))
+               sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
+  CHD[CHD == "05-Mar"] <- "MARCH5" #### 0718 HGNC comfirm
+  
+  CHD <- CHD %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.)), CHD = NA))
   geneset_onehot <- bind_cols(geneset_onehot, CHD)
   
   DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/DEG_geneset.txt", header = T, sep = "\t", stringsAsFactors = F, data.table = F)
@@ -92,8 +94,9 @@ fix_load <- function(data_name){
     freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
       rename(ID = SNP)
     test_fix <- left_join(x = test_fix, y = freq, by = "ID")
-    return(test_fix)
     
+    
+
   } else{
   test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
     as_tibble()
@@ -113,8 +116,40 @@ fix_load <- function(data_name){
     rename(ID = SNP)
   test_fix <- left_join(x = test_fix, y = freq, by = "ID")
   
-  return(test_fix)
   }
+  
+  # O2 HGNC symobl 0719
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^PARK2$", replacement = "PRKN")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^C10orf2$", replacement = "TWNK")
+  
+  # CHD HGNC
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^LPHN3$", replacement = "ADGRL3")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^ALS2CR11$", replacement = "C2CD6")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA1737$", replacement = "CIPC")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^CCDC129$", replacement = "ITPRID1")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^SUV420H1$", replacement = "KMT5B")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^WIBG$", replacement = "PYM1")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^FAM65C$", replacement = "RIPOR3")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA1468$", replacement = "RELCH")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA2018$", replacement = "USF3")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA0196$", replacement = "WASHC5")
+  
+  {  # ADGRL3  -> LPHN3
+  # ALS2CR11 -> C2CD6
+  # CIPC -> KIAA1737
+  # CNTF -> not fix
+  # ITPRID1 -> CCDC129
+  # KMT5B -> SUV420H1
+  # NUP63 -> not fix
+  # PYM1 -> WIBG
+  # RELCH -> KIAA1468
+  # RIPOR3 -> FAM65C
+  # USF3 -> KIAA2018
+  # WASHC5 -> KIAA0196
+  }
+  
+  
+  return(test_fix)
 } # data_name, "IPDGC", "NeuroX"
 
 geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, CADD_score){

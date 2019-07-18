@@ -72,8 +72,22 @@ fix_load <- function(data_name, type){
       as_tibble() 
     test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
     test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
+    
+    # O2 HGNC symobl 0719
     test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^PARK2$", replacement = "PRKN")
     test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^C10orf2$", replacement = "TWNK")
+    
+    # CHD HGNC
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^LPHN3$", replacement = "ADGRL3")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^ALS2CR11$", replacement = "C2CD6")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA1737$", replacement = "CIPC")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^CCDC129$", replacement = "ITPRID1")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^SUV420H1$", replacement = "KMT5B")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^WIBG$", replacement = "PYM1")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA1468$", replacement = "RELCH")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA2018$", replacement = "USF3")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA0196$", replacement = "WASHC5")
+    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^FAM65C$", replacement = "RIPOR3")
     
     return(test_fix)
   }
@@ -110,12 +124,6 @@ fix_load <- function(data_name, type){
       rename(ID = SNP)
     test_fix <- left_join(x = test_fix, y = freq, by = "ID")
     
-    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^PARK2$", replacement = "PRKN")
-    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^C10orf2$", replacement = "TWNK")
-    
-    
-    return(test_fix)
-    
   } else if(data_name == "NeuroX" & type != "ROW"){
     test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
       as_tibble()
@@ -135,12 +143,26 @@ fix_load <- function(data_name, type){
       rename(ID = SNP)
     test_fix <- left_join(x = test_fix, y = freq, by = "ID")
     
-    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^PARK2$", replacement = "PRKN")
-    test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^C10orf2$", replacement = "TWNK")
     
-    
-    return(test_fix)
   }
+  
+  # O2 HGNC symobl 0719
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^PARK2$", replacement = "PRKN")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^C10orf2$", replacement = "TWNK")
+  
+  # CHD HGNC
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^LPHN3$", replacement = "ADGRL3")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^ALS2CR11$", replacement = "C2CD6")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA1737$", replacement = "CIPC")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^CCDC129$", replacement = "ITPRID1")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^SUV420H1$", replacement = "KMT5B")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^WIBG$", replacement = "PYM1")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA1468$", replacement = "RELCH")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA2018$", replacement = "USF3")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA0196$", replacement = "WASHC5")
+  test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^FAM65C$", replacement = "RIPOR3")
+  
+  return(test_fix)
 } # data_name, "IPDGC", "NeuroX"
 geneset_extract <- function(geneset_merge, col_name, test_fix, data_name, index_){
   print("geneset SetID making!!")
@@ -540,7 +562,7 @@ table3_ver_2_gene <- function(WES_table, geneset_name, CADD_score = 20){
   
   return(result)
 }
-table3_ver_3_sample <- function(data_list, geneset_name){
+table3_ver_3_sample <- function(data_list, geneset_name, CADD_score = 20){
   index <- which(names(data_list) == geneset_name)
   temp <- data_list[[index]]
   temp$Clinical_Significance <- str_replace(temp$Clinical_Significance, ## missing resolve 0717
@@ -548,8 +570,6 @@ table3_ver_3_sample <- function(data_list, geneset_name){
                                             replacement = "Pathogenic_ALL")
   temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
   sample <- temp$IID %>% unique() %>% sort()
-  
-  iid <- sample[which(sample == "UMARY-1903")]
   
   sample_result <- mclapply(X = sample, FUN = function(iid){
     # result <- list()
@@ -676,6 +696,100 @@ table3_ver_3_sample <- function(data_list, geneset_name){
   
   return(sample_result)
 } 
+
+#  plot
+plot_data_load <- function(){
+    plot_list <- list()
+    
+    plot_list[["O2"]] <- fread(file = "O2_sample_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>% .[,c(1:6, 23)]
+    plot_list[["O2_PARK"]] <- fread(file = "O2_PARK_sample_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>% .[,c(1:6, 23)]
+    plot_list[["O2_NONPARK"]] <- fread(file = "O2_NONPARK_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>% .[,c(1:6, 23)]
+    
+    # O2 %>% filter(PHENOTYPE == "case") %>% base::summary()
+    # O2 %>% filter(PHENOTYPE == "control") %>% base::summary()
+    
+    
+    return(plot_list)
+  }
+plot_create <- function(data, data_col, geneset){
+    
+    for(phenotype in c("case","control")){
+      plot_df <- filter(data, PHENOTYPE == phenotype)
+      
+      if(data_col == "Pathogenic_ALL"){
+        ggplot(data = plot_df, aes(x = Pathogenic_ALL, y = AGE, group = Pathogenic_ALL)) +
+          geom_boxplot() +
+          coord_cartesian(xlim = seq(0, 8, 1), ylim = seq(10, 100, 10), expand = T) +
+          scale_x_continuous(breaks = seq(0, 8, 1)) +
+          scale_y_continuous(breaks = seq(0, 100, 10)) +
+          ggtitle(paste0(data_col, "(", phenotype,")","_", geneset)) +
+          labs(x = "Variant count", y = "AGE") +
+          theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 20, color = "darkblue", family = "serif"),
+                axis.title = element_text(size = 14, color = "darkblue"),
+                axis.text = element_text(face = "bold", size = 10)) 
+        
+        ggsave(paste0(data_col, "(", phenotype,")","_", geneset, ".png"))
+        
+      } else if(data_col == "LoF_ALL"){
+        ggplot(data = plot_df, aes(x = LoF_ALL, y = AGE, group = LoF_ALL)) +
+          geom_boxplot() +
+          coord_cartesian(xlim = seq(0, 8, 1), ylim = seq(10, 100, 10), expand = T) +
+          scale_x_continuous(breaks = seq(0, 8, 1)) +
+          scale_y_continuous(breaks = seq(0, 100, 10)) +
+          ggtitle(paste0(data_col, "(", phenotype,")","_", geneset)) +
+          labs(x = "Variant count", y = "AGE") +
+          theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 20, color = "darkblue", family = "serif"),
+                axis.title = element_text(size = 14, color = "darkblue"),
+                axis.text = element_text(face = "bold", size = 10))
+        
+        ggsave(paste0(data_col, "(", phenotype,")","_", geneset, ".png"))
+        
+      } else if(data_col == "CADD_MAF003_ALL"){
+        ggplot(data = plot_df, aes(x = CADD_MAF003_ALL, y = AGE, group = CADD_MAF003_ALL)) +
+          geom_boxplot() +
+          coord_cartesian(xlim = seq(0, 8, 1), ylim = seq(10, 100, 10), expand = T) +
+          scale_x_continuous(breaks = seq(0, 8, 1)) +
+          scale_y_continuous(breaks = seq(0, 100, 10)) +
+          ggtitle(paste0(data_col, "(", phenotype,")","_", geneset)) +
+          labs(x = "Variant count", y = "AGE") +
+          theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 20, color = "darkblue", family = "serif"),
+                axis.title = element_text(size = 14, color = "darkblue"),
+                axis.text = element_text(face = "bold", size = 10))
+        
+        ggsave(paste0(data_col, "(", phenotype,")","_", geneset, ".png"))
+        
+      } else if(data_col == "CADD_MAF001_ALL"){
+        
+        ggplot(data = plot_df, aes(x = CADD_MAF001_ALL, y = AGE, group = CADD_MAF001_ALL)) +
+          geom_boxplot() +
+          coord_cartesian(xlim = seq(0, 8, 1), ylim = seq(10, 100, 10), expand = T) +
+          scale_x_continuous(breaks = seq(0, 8, 1)) +
+          scale_y_continuous(breaks = seq(0, 100, 10)) +
+          ggtitle(paste0(data_col, "(", phenotype,")","_", geneset)) +
+          labs(x = "Variant count", y = "AGE") +
+          theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 20, color = "darkblue", family = "serif"),
+                axis.title = element_text(size = 14, color = "darkblue"),
+                axis.text = element_text(face = "bold", size = 10)) 
+        ggsave(paste0(data_col, "(", phenotype,")","_", geneset, ".png"))
+        
+      } else{
+        stop("uncorrected name!!!!")
+      }
+    }
+    
+  }
+# plot_create(data = O2_NONPARK, data_col = colnames(O2)[3], geneset = "O2_NONPARK")
+plot_result <- function(list_DF, geneset_name){
+    
+    for(index in 3:(length(list_DF) - 1))
+      plot_create(data = list_DF, data_col = colnames(list_DF)[index], geneset = geneset_name)
+    
+  }
+  
+# plot_result(list_DF = plot_list[[1]], geneset_name = "O2")
+# plot_result(list_DF = plot_list[[2]], geneset_name = "O2_PARK")
+# plot_result(list_DF = plot_list[[3]], geneset_name = "O2_NONPARK")
+
 
 
 
