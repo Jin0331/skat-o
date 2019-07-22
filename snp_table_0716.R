@@ -696,9 +696,121 @@ table3_ver_3_sample <- function(data_list, geneset_name, CADD_score = 20){
   
   return(sample_result)
 } 
+table3_ver_3_sample_gene <- function(data_list, geneset_name, type, CADD_score = 20){
+  index <- which(names(data_list) == geneset_name)
+  temp <- data_list[[index]]
+  temp$Clinical_Significance <- str_replace(temp$Clinical_Significance, ## missing resolve 0717
+                                            pattern = "(^Pathogenic$)|^(Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic,_risk_factor$)",
+                                            replacement = "Pathogenic_ALL")
+  temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
+  sample <- temp$IID %>% unique() %>% sort()
+  
+  sample_result <- mclapply(X = sample, FUN = function(iid){
+    # result <- list()
+    PHENOTYPE <- temp %>% filter(IID == iid) %>% select(PHENOTYPE) %>% pull(1) %>% 
+      unique() 
+    PHENOTYPE <- ifelse(PHENOTYPE == 1, "control", "case")
+    
+    # Pathogenic
+    
+    Pathogenic <- temp %>% 
+      filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", 
+             IID == iid, Heterozygous != T) %>% 
+      select(Clinical_Significance) %>%
+      group_by_all() %>% count() %>% pull(2) %>% ifelse(length(.) == 0, 0, .)
+    
+    if(Pathogenic != 0){
+      Pathogenic_name <- temp %>% 
+        filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", 
+               IID == iid, Heterozygous != T) %>% .$ID %>% as_tibble()
+      Pathogenic_ID <- temp %>% 
+        filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", 
+               IID == iid, Heterozygous != T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+        bind_cols(., Pathogenic_name) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
+        t() %>% as_tibble()
+    } else {Pathogenic_ID <- NULL}
+    
+    
+    # LoF
+    
+    LoF <- temp %>% 
+      filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
+             IID == iid, Func == "LoF", Heterozygous != T) %>%
+      select(Clinical_Significance) %>%
+      group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
+    
+    if(LoF!= 0){
+      LoF_name <- temp %>% 
+        filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
+               IID == iid, Func == "LoF", Heterozygous != T) %>% .$ID %>% as_tibble()
+      
+      LoF_ID <- temp %>% 
+        filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
+               IID == iid, Func == "LoF", Heterozygous != T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+        bind_cols(., LoF_name) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
+        t() %>% as_tibble()
+    } else {LoF_ID <- NULL}
+    
+    
+    
+    # CADD
+    for(value in c(0.03, 0.01)){
+      CADD <- temp %>% 
+        filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
+               IID == iid, Heterozygous != T) %>% select(Clinical_Significance) %>%        
+        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
+      
+      if(CADD != 0){
+        CADD_name <- temp %>% 
+          filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
+                 IID == iid, Heterozygous != T) %>% .$ID %>% as_tibble()
+        
+        CADD_ID <- temp %>% 
+          filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
+                 IID == iid, Heterozygous != T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+          bind_cols(., CADD_name) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
+          t() %>% as_tibble()
+        
+      } else {CADD_ID <- NULL}
+      
+      if(value == 0.03){
+        CADD_MAF003 <- CADD
+        CADD_MAF003_ID <- CADD_ID
+      } else{
+        CADD_MAF001<- CADD
+        CADD_MAF001_ID <- CADD_ID
+      }
+      
+    }
+    
+    #######
+    snp_table <- switch(type, "Pathogenic" = Pathogenic_ID,
+                        "LoF" = LoF_ID,
+                        "CADD_MAF003" = CADD_MAF003_ID,
+                        "CADD_MAF001" = CADD_MAF001_ID,
+                        "ALL" = bind_cols(Pathogenic_ID, LoF_ID, CADD_MAF003_ID) %>% as_tibble()
+    )
+    
+    # if(nrow(snp_table) == 0) {
+    #   snp_table <- tibble(V1 = 0)
+    # }
+    # 
+    # snp_name <- c()
+    # for(index in 1:50){ snp_name <- c(snp_name, paste0(type,"_SNP#",index)) }
+    # 
+    # 
+    # names(snp_table) <- snp_name[1:ncol(snp_table)]
+    
+    tibble(Subject_ID = iid, PHENOTYPE) %>% bind_cols(snp_table) %>% return()
+  }, mc.cores = detectCores() -1)
+  
+  return(sample_result)
+} 
 
-#  plot
-plot_data_load <- function(){
+
+# corr & plot
+{
+  plot_data_load <- function(){
     plot_list <- list()
     
     plot_list[["O2"]] <- fread(file = "O2_sample_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>% .[,c(1:6, 23)]
@@ -711,7 +823,7 @@ plot_data_load <- function(){
     
     return(plot_list)
   }
-plot_create <- function(data, data_col, geneset){
+  plot_create <- function(data, data_col, geneset){
     
     for(phenotype in c("case","control")){
       plot_df <- filter(data, PHENOTYPE == phenotype)
@@ -778,17 +890,50 @@ plot_create <- function(data, data_col, geneset){
     }
     
   }
-# plot_create(data = O2_NONPARK, data_col = colnames(O2)[3], geneset = "O2_NONPARK")
-plot_result <- function(list_DF, geneset_name){
+  # plot_create(data = O2_NONPARK, data_col = colnames(O2)[3], geneset = "O2_NONPARK")
+  plot_result <- function(list_DF, geneset_name){
     
     for(index in 3:(length(list_DF) - 1))
       plot_create(data = list_DF, data_col = colnames(list_DF)[index], geneset = geneset_name)
     
   }
   
-# plot_result(list_DF = plot_list[[1]], geneset_name = "O2")
-# plot_result(list_DF = plot_list[[2]], geneset_name = "O2_PARK")
-# plot_result(list_DF = plot_list[[3]], geneset_name = "O2_NONPARK")
+  # plot_result(list_DF = plot_list[[1]], geneset_name = "O2")
+  # plot_result(list_DF = plot_list[[2]], geneset_name = "O2_PARK")
+  # plot_result(list_DF = plot_list[[3]], geneset_name = "O2_NONPARK")
+  
+  # fread(file = "O2_sample_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>%
+  #   select(Subject_ID, PHENOTYPE, AGE,Pathogenic_ALL, LoF_ALL, CADD_MAF003_ALL, CADD_MAF001_ALL) %>% corr_geneset()
+  # 
+  # fread(file = "O2_PARK_sample_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>%
+  #   select(Subject_ID, PHENOTYPE, AGE,Pathogenic_ALL, LoF_ALL, CADD_MAF003_ALL, CADD_MAF001_ALL) %>% corr_geneset()
+  # 
+  # fread(file = "O2_NONPARK_snv_.txt", header = T, sep = "\t") %>% as_tibble() %>%
+  #   select(Subject_ID, PHENOTYPE, AGE,Pathogenic_ALL, LoF_ALL, CADD_MAF003_ALL, CADD_MAF001_ALL) %>% corr_geneset()
+  
+  corr_geneset <- function(geneset_df){
+    return_list <- list()
+    return_list[["case"]] <- filter(geneset_df, PHENOTYPE == "case") %>% corr_t()
+    return_list[["control"]] <- filter(geneset_df, PHENOTYPE == "control") %>% corr_t()
+    
+    
+    
+    return(return_list)
+    
+  }
+  corr_t <- function(table){
+    result <- c()
+    result <- c(result, cor(x = table$Pathogenic_ALL, y = table$AGE))
+    result <- c(result, cor(x = table$LoF_ALL, y = table$AGE))
+    result <- c(result, cor(x = table$CADD_MAF003_ALL, y = table$AGE))
+    result <- c(result, cor(x = table$CADD_MAF001_ALL, y = table$AGE))
+    
+    names(result) <- c("Pathogenic", "LoF", "CADD20_MAF003","CADD20_MAF001")
+    
+    return(result)
+  }  
+}
+
 
 
 
