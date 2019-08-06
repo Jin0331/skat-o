@@ -1,0 +1,8 @@
+<0704 세미나 사항>
+1. NeuroX table 생성
+2. table3 count 확인 및 table3 빈 부분 채우기(), MAF 없음(rs695871 제거)
+3. table4 adjusted p-value 및 빈 부분 채워넣기(corected p-value)
+4. table4_suppl NeuroX 12, 14, 33행 p-value 역전되는 부분 확인
+5. table5 clinvar, non-syn + lof variation, hetero muation x1, homo mutation x2 count(WES)
+  * 2개 이상 case 부분;
+6. 다음주 금요일까지
