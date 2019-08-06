@@ -37,7 +37,6 @@ rsconnect/
 .Rproj.user
 
 ### skat-o directory ignore
-*/
 skat-o.Rproj
 *.vcf
 *.vcf.gz
