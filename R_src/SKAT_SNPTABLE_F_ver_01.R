@@ -1,4 +1,4 @@
-# library path
+# library path ====
 library_load <- function(){
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(tidyverse);library(parallel)
   library(tidyselect);library(magrittr);library(SKAT);
@@ -7,13 +7,51 @@ library_load <- function(){
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
 }
 
-## SKAT-O FUNCTION
-{
-  # function
+# SKAT-O FUNCTION ====================
+  # cov make 
+  cov_make_not_run <- function(name){
+  # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{name} --indep-pairwise 50 5 0.2 --out skat_pruning", name = name))
+  # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{name} --genome full --out skatQC_IBD", name = name))
+  # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{name} --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out {name}_MDS",
+  #             name = name))
+  # name <- "set3"
+  
+  system(glue("plink --bfile IPDGC_{name} --indep-pairwise 50 5 0.2 --out skat_pruning", name = name))
+  system(glue("plink --bfile IPDGC_{name} --genome full --out skatQC_IBD", name = name))
+  system(glue("plink --bfile IPDGC_{name} --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out {name}_MDS",
+              name = name))
+  system(glue("plink --bfile IPDGC_{name} --missing --out IPDGC_F_MISS", name = name))
+  
+  
+  ###
+  
+  
+  mds <- fread(file = paste0(name,"_MDS.mds"), header = T) %>% select(., -SOL)
+  age_control <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/skat_cov/IPDGC_control_phenotype.txt"), select = c(2,7)) %>%
+    select(., IID = SUBJECT_ID, AGE = Age)
+  age_case <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/skat_cov/IPDGC_case_phenotype.txt"), select = c(2,7)) %>%
+    select(., IID = SUBJECT_ID, AGE = Age)
+  age <- bind_rows(age_case, age_control)
+  
+  
+  Fmiss <- fread(file = "IPDGC_F_MISS.imiss") %>% select(IID, F_MISS)
+  cov <- left_join(x = mds, y = age, by = "IID") %>% 
+    left_join(x = ., y = Fmiss, by = "IID")
+  
+  fwrite(x = cov, file = paste0("IPDGC_",name,".cov"), row.names = F, sep = "\t")
+}
+  
+  # function 
   geneset_load_SKAT <- function(){
     print("Geneset load_0428!")
     return_list <- list()
-    geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O.txt", header = T, 
+    
+    # 93 gene
+    # geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O.txt", header = T, 
+    #                        sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble() 
+    
+    # 92 gene_SLC25A4 remove
+    geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O_SLC25A4_remove.txt", header = T, 
                            sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
     
     one_hot <- lapply(X=select(geneset_merge, -HGNC, -M2, -'M2-GBA-LRRK2', -'M2_Brain_gene', -'M2_NOT_brain'), 
@@ -504,15 +542,21 @@ library_load <- function(){
     file.remove(list.files()[!str_detect(list.files(), pattern = "cov|MAC|SetID")])
     Close_SSD()
   }
-}
 
-## SNP TABLE FUCNTION
-{
+
+# SNP TABLE FUCNTION =============================
+
   # preprocessing
   geneset_load <- function(){
     print("Geneset load_0428!")
     return_list <- list()
-    geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O.txt", header = T, 
+    
+    # 93 gene
+    # geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O.txt", header = T, 
+    #                        sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble() 
+    
+    # 92 gene_SLC25A4 remove
+    geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O_SLC25A4_remove.txt", header = T, 
                            sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
     
     one_hot <- lapply(X=select(geneset_merge, -HGNC, -M2, -'M2-GBA-LRRK2', -'M2_Brain_gene', -'M2_NOT_brain'), 
@@ -640,8 +684,16 @@ library_load <- function(){
       }
       test_fix$ID <- test_id
       
-      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
-        rename(ID = SNP)
+
+      
+      if(data_name == "IPDGC"){
+        freq <- fread(file = "/home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/IPDGC_freq.frq", header = T) %>%
+          rename(ID = SNP)
+      } else {
+        freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+          rename(ID = SNP)
+      }
+      
       test_fix <- left_join(x = test_fix, y = freq, by = "ID")
       
       
@@ -791,9 +843,14 @@ library_load <- function(){
     geneset_extract(geneset[[1]], geneset[[2]], fix, data_name, index_)
     
     for(index in index_){
-      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
+      # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn",
+      #             data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof",
+      #             data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/{data_name}_set1 --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn",
                   data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
-      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof", 
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/{data_name}_set1 --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof",
                   data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
       
       nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, SEX) %>% as_tibble()
@@ -883,9 +940,14 @@ library_load <- function(){
     
     if(data_name == "IPDGC"){
       for(index in index_){
-        system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
+        # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn", 
+        #             data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+        # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof", 
+        #             data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+        
+        system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/{data_name}_set1 --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn",
                     data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
-        system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof", 
+        system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/{data_name}_set1 --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof",
                     data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
         
         nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, -SEX)
@@ -993,7 +1055,7 @@ library_load <- function(){
       
     } else if(type == "LoF"){
       temp2 <- temp %>% arrange(IID) %>% 
-        filter(MAF <= MAF_value, Func == "LoF", Heterozygous != TRUE, Clinical_Significance != "Pathogenic_ALL") %>%
+        filter(Func == "LoF", Heterozygous != TRUE) %>%
         table3_CLSIG() %>% bind_rows()
       temp2[is.na(temp2)] <- 0
       
@@ -1009,7 +1071,7 @@ library_load <- function(){
       
     }else if(type == "CADD_MAF"){
       temp2 <- temp %>% arrange(IID) %>% 
-        filter(MAF <= MAF_value, Heterozygous != TRUE, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL") %>%
+        filter(MAF <= MAF_value, Heterozygous != TRUE, CADD13_PHRED >= CADD_score) %>%
         table3_CLSIG() %>% bind_rows()
       temp2[is.na(temp2)] <- 0
       
@@ -1032,52 +1094,9 @@ library_load <- function(){
     result <- bind_cols(case, control) 
     
     if(result[1,1] == 0)
-      result[1,1] <- 443 - result[,1] %>% sum
+      result[1,1] <- 445 - result[,1] %>% sum
     if(result[1,2] == 0)
       result[1,2] <- 333 - result[,2] %>% sum
-    
-    return(result)
-  }
-  table3_ver_2_gene <- function(WES_table, geneset_name, CADD_score = 20){
-    index <- which(names(WES_table) == geneset_name)
-    
-    temp <- WES_table[[index]]
-    temp$Clinical_Significance <- str_replace(temp$Clinical_Significance, ## missing resolve 0717
-                                              pattern = "(^Pathogenic$)|^(Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic,_risk_factor$)",
-                                              replacement = "Pathogenic_ALL")
-    temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
-    gene <- temp$Gene.knownGene %>% unique() %>% sort()
-    result <- list()
-    category <- geneset_name
-    # Genes in ~ 
-    
-    for(Genes in gene){
-      Pathogenic_ALL <- temp %>% 
-        filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", Gene.knownGene == Genes) %>% select(Clinical_Significance) %>%
-        group_by_all() %>% count() %>% pull(2) %>% ifelse(length(.) == 0, 0, .)
-      
-      LoF_003 <- temp %>% 
-        filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes, Func == "LoF") %>% select(Clinical_Significance) %>%
-        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
-      
-      LoF_001 <- temp %>% 
-        filter(MAF <= 0.01, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes, Func == "LoF") %>% select(Clinical_Significance) %>%
-        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
-      
-      
-      CADD13_MAF003 <- temp %>% 
-        filter(MAF <= 0.03, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes) %>% 
-        select(Clinical_Significance) %>%
-        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
-      
-      CADD13_MAF001 <- temp %>% 
-        filter(MAF <= 0.01, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes) %>% 
-        select(Clinical_Significance) %>%
-        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
-      
-      
-      result[[`Genes`]] <- tibble(category, Genes, Pathogenic_ALL, LoF_003, CADD13_MAF003, LoF_001, CADD13_MAF001) 
-    }
     
     return(result)
   }
@@ -1131,28 +1150,24 @@ library_load <- function(){
       # LoF
       {
         LoF_Hetero <- temp %>% 
-          filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                 IID == iid, Func == "LoF", Heterozygous_M == T) %>%
+          filter(IID == iid, Func == "LoF", Heterozygous_M == T) %>%
           select(Clinical_Significance) %>%
           group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
         
         if(LoF_Hetero != 0){
           Hetero_name <- temp %>% 
-            filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Func == "LoF", Heterozygous_M == T) %>% .$ID
+            filter(IID == iid, Func == "LoF", Heterozygous_M == T) %>% .$ID
           LoF_Hetro_ID <- str_c(Hetero_name, collapse = ";");Hetero_name <- NULL
         } else {LoF_Hetro_ID <- " "}
         
         LoF_Homo <- temp %>% 
-          filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                 IID == iid, Func == "LoF", Homozygous_M == T) %>%
+          filter(IID == iid, Func == "LoF", Homozygous_M == T) %>%
           select(Clinical_Significance) %>%
           group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
         
         if(LoF_Homo != 0){
           Homo_name <- temp %>% 
-            filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Func == "LoF", Homozygous_M == T) %>% .$ID
+            filter(IID == iid, Func == "LoF", Homozygous_M == T) %>% .$ID
           LoF_Homo_ID <- str_c(Homo_name, collapse = ";");Homo_name <- NULL
         } else {LoF_Homo_ID <- " "}
       }
@@ -1161,28 +1176,24 @@ library_load <- function(){
       {
         for(value in c(0.03, 0.01)){
           CADD_Hetero <- temp %>% 
-            filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Heterozygous_M == T) %>%
+            filter(MAF <= value, CADD13_PHRED >= CADD_score,IID == iid, Heterozygous_M == T) %>%
             select(Clinical_Significance) %>%
             group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
           
           if(CADD_Hetero != 0){
             Hetero_name <- temp %>% 
-              filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                     IID == iid, Heterozygous_M == T) %>% .$ID
+              filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Heterozygous_M == T) %>% .$ID
             CADD_Hetro_name <- str_c(Hetero_name, collapse = ";");Hetero_name <- NULL
           } else {CADD_Hetro_name <- " "}
           
           CADD_Homo <- temp %>% 
-            filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Homozygous_M == T) %>%
+            filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Homozygous_M == T) %>%
             select(Clinical_Significance) %>%
             group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
           
           if(CADD_Homo != 0){
             Homo_name <- temp %>% 
-              filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                     IID == iid, Homozygous_M == T) %>% .$ID
+              filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Homozygous_M == T) %>% .$ID
             CADD_Homo_name <- str_c(Homo_name, collapse = ";");Homo_name <- NULL
           } else {CADD_Homo_name <- " "}
           
@@ -1205,14 +1216,15 @@ library_load <- function(){
       tibble(Subject_ID = iid, SEX, PHENOTYPE, Pathogenic_ALL = (Pathogenic_Hetro + (Pathogenic_Homo * 2)),
              LoF_ALL = (LoF_Hetero + (LoF_Homo * 2)),
              CADD_MAF003_ALL = (CADD_MAF003_Hetero + (CADD_MAF003_Homo * 2)),
-             CADD_MAF001_ALL = (CADD_MAF001_Hetero + (CADD_MAF001_Homo * 2)),
-             Pathogenic_Hetro, Pathogenic_Hetro_ID,
-             Pathogenic_Homo, Pathogenic_Homo_ID,
-             LoF_Hetero, LoF_Hetro_ID, LoF_Homo, LoF_Homo_ID,
-             CADD_MAF003_Hetero, CADD_MAF003_Hetero_ID,
-             CADD_MAF003_Homo, CADD_MAF003_Homo_ID,
-             CADD_MAF001_Hetero, CADD_MAF001_Hetero_ID,
-             CADD_MAF001_Homo, CADD_MAF001_Homo_ID) %>% return()
+             CADD_MAF001_ALL = (CADD_MAF001_Hetero + (CADD_MAF001_Homo * 2))
+             # ,Pathogenic_Hetro, Pathogenic_Hetro_ID,
+             # Pathogenic_Homo, Pathogenic_Homo_ID,
+             # LoF_Hetero, LoF_Hetro_ID, LoF_Homo, LoF_Homo_ID,
+             # CADD_MAF003_Hetero, CADD_MAF003_Hetero_ID,
+             # CADD_MAF003_Homo, CADD_MAF003_Homo_ID,
+             # CADD_MAF001_Hetero, CADD_MAF001_Hetero_ID,
+             # CADD_MAF001_Homo, CADD_MAF001_Homo_ID
+             ) %>% return()
     }, mc.cores = detectCores() -1)
     
     return(sample_result)
@@ -1225,6 +1237,23 @@ library_load <- function(){
                                               replacement = "Pathogenic_ALL")
     temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
     sample <- temp$IID %>% unique() %>% sort()
+    
+    # colnames set 
+    name_change <- function(ID_DF, type){
+      
+      type <- paste0(type, "_Variant")
+      col_n <- c()
+      
+      if(ncol(ID_DF) >= 1){
+        for(index in 1:ncol(ID_DF)) {
+          col_n <- c(col_n, paste0(type, index))
+        }
+        colnames(ID_DF) <- col_n  
+        
+        return(ID_DF)  
+      } else return(ID_DF)
+      
+    }
     
     sample_result <- mclapply(X = sample, FUN = function(iid){
       # result <- list()
@@ -1248,9 +1277,7 @@ library_load <- function(){
           filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", 
                  IID == iid, Heterozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
           bind_cols(., Pathogenic_name_He) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
-          t() %>% as_tibble() %>% rename_all(.funs = function(name){
-            paste0("Pathogenic_Hetero_",name)
-          })
+          t() %>% as_tibble() 
         
         Pathogenic_name_Ho <- temp %>% 
           filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", 
@@ -1263,12 +1290,12 @@ library_load <- function(){
             filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", 
                    IID == iid, Homozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
             bind_cols(., Pathogenic_name_Ho) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
-            t() %>% as_tibble() %>% rename_all(.funs = function(name){
-              paste0("Pathogenic_Homo_",name)
-            })
+            t() %>% as_tibble() 
+          Pathogenic_ID_Ho <- bind_cols(Pathogenic_ID_Ho, Pathogenic_ID_Ho)
         }
         
-        Pathogenic_ID <- bind_cols(Pathogenic_ID_He, Pathogenic_ID_Ho)
+        Pathogenic_ID <- bind_cols(Pathogenic_ID_He, Pathogenic_ID_Ho) %>% 
+          name_change(ID_DF = ., type = "Pathogenic")
         
       } else {Pathogenic_ID <- tibble(.rows = 1)}
       
@@ -1276,41 +1303,35 @@ library_load <- function(){
       # LoF
       
       LoF <- temp %>% 
-        filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-               IID == iid, Func == "LoF", Heterozygous != T) %>%
+        filter(IID == iid, Func == "LoF", Heterozygous != T) %>%
         select(Clinical_Significance) %>%
         group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
       
       if(LoF!= 0){
         LoF_name_He <- temp %>% 
-          filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                 IID == iid, Func == "LoF", Heterozygous_M == T) %>% .$ID %>% as_tibble()
+          filter(IID == iid, Func == "LoF", Heterozygous_M == T) %>% .$ID %>% as_tibble()
         
         LoF_ID_He <- temp %>% 
-          filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                 IID == iid, Func == "LoF", Heterozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+          filter(IID == iid, Func == "LoF", Heterozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
           bind_cols(., LoF_name_He) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
-          t() %>% as_tibble() %>% rename_all(.funs = function(name){
-            paste0("LoF_Hetero_",name)
-          })
+          t() %>% as_tibble()
         
         LoF_name_Ho <- temp %>% 
-          filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                 IID == iid, Func == "LoF", Homozygous_M == T) %>% .$ID %>% as_tibble()
+          filter(IID == iid, Func == "LoF", Homozygous_M == T) %>% .$ID %>% as_tibble()
         
         if(nrow(LoF_name_Ho) == 0){
           LoF_ID_Ho <- NULL
         } else {
           LoF_ID_Ho <- temp %>% 
-            filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Func == "LoF", Homozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+            filter(IID == iid, Func == "LoF", Homozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
             bind_cols(., LoF_name_Ho) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
-            t() %>% as_tibble() %>% rename_all(.funs = function(name){
-              paste0("LoF_Homo_",name)
-            })
+            t() %>% as_tibble() 
+          LoF_ID_Ho <- bind_cols(LoF_ID_Ho, LoF_ID_Ho)
         }
         
-        LoF_ID <- bind_cols(LoF_ID_He, LoF_ID_Ho)
+        LoF_ID <- bind_cols(LoF_ID_He, LoF_ID_Ho) %>% 
+          name_change(ID_DF = ., type = "LoF")
+        
         
       } else {
         LoF_ID <- tibble(.rows = 1)
@@ -1321,48 +1342,48 @@ library_load <- function(){
       # CADD
       for(value in c(0.03, 0.01)){
         CADD <- temp %>% 
-          filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                 IID == iid, Heterozygous != T) %>% select(Clinical_Significance) %>%        
+          filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Heterozygous != T) %>% select(Clinical_Significance) %>%        
           group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
         
         if(CADD != 0){
           CADD_name_He <- temp %>% 
-            filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Heterozygous_M == T) %>% .$ID %>% as_tibble()
+            filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Heterozygous_M == T) %>% .$ID %>% as_tibble()
           CADD_ID_He <- temp %>% 
-            filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Heterozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+            filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Heterozygous_M == T) %>% 
+            .$Gene.knownGene %>% as_tibble() %>% 
             bind_cols(., CADD_name_He) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
-            t() %>% as_tibble() %>% rename_all(.funs = function(name){
-              paste0("CADD_MAF003_Hetero_",name)
-            })
+            t() %>% as_tibble() 
           
           
           CADD_name_Ho <- temp %>% 
-            filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                   IID == iid, Homozygous_M == T) %>% .$ID %>% as_tibble()
+            filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Homozygous_M == T) %>% .$ID %>% as_tibble()
           
           if(nrow(CADD_name_Ho) == 0){
             CADD_ID_Ho <- NULL
           } else{
             CADD_ID_Ho <- temp %>% 
-              filter(MAF <= value, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", 
-                     IID == iid, Homozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
+              filter(MAF <= value, CADD13_PHRED >= CADD_score, IID == iid, Homozygous_M == T) %>% .$Gene.knownGene %>% as_tibble() %>% 
               bind_cols(., CADD_name_Ho) %>% transmute(gene_rs = paste0(value, "(", value1,")")) %>%
-              t() %>% as_tibble() %>% rename_all(.funs = function(name){
-                paste0("CADD_MAF003_Homo_",name)
-              })
+              t() %>% as_tibble() 
+            
+            CADD_ID_Ho <- bind_cols(CADD_ID_Ho,CADD_ID_Ho)
           }
           
-          CADD_ID <- bind_cols(CADD_ID_He, CADD_ID_Ho)
+          CADD_ID <- bind_cols(CADD_ID_Ho, CADD_ID_He) 
           
         } else {
           CADD_ID <- tibble(.rows = 1)
         }
         
         
-        if(value == 0.03){CADD_MAF003_ID <- CADD_ID
-        }else{CADD_MAF001_ID <- CADD_ID}
+        if(value == 0.03){
+          CADD_MAF003_ID <- CADD_ID %>% 
+            name_change(ID_DF = ., type = "CADD_MAF003")
+          
+        } else {
+          CADD_MAF001_ID <- CADD_ID %>% 
+            name_change(ID_DF = ., type = "CADD_MAF001")
+          }
         
       }
       
@@ -1371,7 +1392,7 @@ library_load <- function(){
                           "LoF" = LoF_ID,
                           "CADD_MAF003" = CADD_MAF003_ID,
                           "CADD_MAF001" = CADD_MAF001_ID,
-                          "ALL" = bind_cols(Pathogenic_ID, CADD_MAF003_ID) %>% as_tibble()
+                          "ALL" = bind_cols(Pathogenic_ID, CADD_MAF003_ID) %>% as_tibble() # only CADD 003
       )
       
       tibble(Subject_ID = iid, PHENOTYPE) %>% bind_cols(snp_table) %>% return()
@@ -1380,7 +1401,7 @@ library_load <- function(){
     return(sample_result)
   } 
   
-  # corr & plot
+  # corr & plot====
   {
     plot_data_load <- function(){
       plot_list <- list()
@@ -1505,4 +1526,48 @@ library_load <- function(){
       return(result)
     }  
   }
-}
+  
+  # not run====
+  table3_ver_2_gene_not_run <- function(WES_table, geneset_name, CADD_score = 20){
+    index <- which(names(WES_table) == geneset_name)
+    
+    temp <- WES_table[[index]]
+    temp$Clinical_Significance <- str_replace(temp$Clinical_Significance, ## missing resolve 0717
+                                              pattern = "(^Pathogenic$)|^(Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic$)|(^Pathogenic/Likely_pathogenic,_risk_factor$)",
+                                              replacement = "Pathogenic_ALL")
+    temp$Clinical_Significance[is.na(temp$Clinical_Significance)] <- "not_available"
+    gene <- temp$Gene.knownGene %>% unique() %>% sort()
+    result <- list()
+    category <- geneset_name
+    # Genes in ~ 
+    
+    for(Genes in gene){
+      Pathogenic_ALL <- temp %>% 
+        filter(MAF <= 0.03, Clinical_Significance == "Pathogenic_ALL", Gene.knownGene == Genes) %>% select(Clinical_Significance) %>%
+        group_by_all() %>% count() %>% pull(2) %>% ifelse(length(.) == 0, 0, .)
+      
+      LoF_003 <- temp %>% 
+        filter(MAF <= 0.03, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes, Func == "LoF") %>% select(Clinical_Significance) %>%
+        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
+      
+      LoF_001 <- temp %>% 
+        filter(MAF <= 0.01, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes, Func == "LoF") %>% select(Clinical_Significance) %>%
+        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
+      
+      
+      CADD13_MAF003 <- temp %>% 
+        filter(MAF <= 0.03, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes) %>% 
+        select(Clinical_Significance) %>%
+        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
+      
+      CADD13_MAF001 <- temp %>% 
+        filter(MAF <= 0.01, CADD13_PHRED >= CADD_score, Clinical_Significance != "Pathogenic_ALL", Gene.knownGene == Genes) %>% 
+        select(Clinical_Significance) %>%
+        group_by_all() %>% count() %>% pull(2) %>% sum() %>% ifelse(length(.) == 0, 0, .)
+      
+      
+      result[[`Genes`]] <- tibble(category, Genes, Pathogenic_ALL, LoF_003, CADD13_MAF003, LoF_001, CADD13_MAF001) 
+    }
+    
+    return(result)
+  }
