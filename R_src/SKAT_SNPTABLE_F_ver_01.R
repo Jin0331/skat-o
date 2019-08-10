@@ -2,6 +2,7 @@
 library_load <- function(){
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(tidyverse);library(parallel)
   library(tidyselect);library(magrittr);library(SKAT);
+  library(progress)
   
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
@@ -105,7 +106,7 @@ library_load <- function(){
     
     return(return_list)
   } ## 1 = geneset_list, 2 = col_name
-  fix_load_SKAT <- function(data_name){
+  fix_load_SKAT <- function(data_name, set_IPDGC){
     print(paste0(data_name, " fix load!"))
     
     if(data_name == "IPDGC"){
@@ -134,9 +135,9 @@ library_load <- function(){
         }
       }
       test_fix$ID <- test_id
-      
-      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/",set_IPDGC,"/",data_name,"_freq.frq"), header = T) %>%
         rename(ID = SNP)
+      
       test_fix <- left_join(x = test_fix, y = freq, by = "ID")
       
       
@@ -178,7 +179,8 @@ library_load <- function(){
     test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA2018$", replacement = "USF3")
     test_fix$Gene.knownGene <- str_replace(test_fix$Gene.knownGene, pattern = "^KIAA0196$", replacement = "WASHC5")
     
-    {  # ADGRL3  -> LPHN3
+    { 
+      # ADGRL3  -> LPHN3
       # ALS2CR11 -> C2CD6
       # CIPC -> KIAA1737
       # CNTF -> not fix
@@ -329,20 +331,38 @@ library_load <- function(){
     }
     
   } # all_gene, column 1 of geneset
-  run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name){
+  run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_IPDGC){
     print("SKAT run")
     if(flag == "geneset"){
       
-      Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
-                         File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
-                         File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                         File.SetID = paste0(data_name,"_skat.SetID"), 
-                         File.SSD = paste0(data_name,".SSD"), 
-                         File.Info = paste0(data_name,".INFO"))
+      if(data_name == "IPDGC"){
+        Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                             "/",data_name,"_", set_IPDGC, ".bed"),
+                           File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                             "/",data_name,"_", set_IPDGC, ".bim"), 
+                           File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                             "/",data_name,"_", set_IPDGC, ".fam"),
+                           File.SetID = paste0(data_name,"_skat.SetID"), 
+                           File.SSD = paste0(data_name,".SSD"), 
+                           File.Info = paste0(data_name,".INFO"))  
+        
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                    "/",data_name,"_", set_IPDGC, ".fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                    "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+      } else {
       
+        Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
+                           File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
+                           File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                           File.SetID = paste0(data_name,"_skat.SetID"), 
+                           File.SSD = paste0(data_name,".SSD"), 
+                           File.Info = paste0(data_name,".INFO"))
+        
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+      }
       
-      FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                                File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
       SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
       if(data_name == "IPDGC"){
         # obj <-SKAT_Null_Model(Phenotype ~ Sex + AGE + C1 + C2 + C3 + C4 + 
@@ -366,8 +386,17 @@ library_load <- function(){
       
       SKAT_result <- 
         parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
-          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE)
+          
+          if(data_name == "IPDGC"){
+            FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                        "/",data_name,"_", set_IPDGC, ".fam"),
+                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                        "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+          } else {
+            FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+          }
+          
           SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
           
           Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T)
@@ -376,20 +405,20 @@ library_load <- function(){
           out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.01)
           
           if(re == 0){
-            skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker,
-                               n_marker_test = out_05$param$n.marker.test, p_value = out_05$p.value)
+            # skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker,
+            #                    n_marker_test = out_05$param$n.marker.test, p_value = out_05$p.value)
             skat_003 <- tibble(SetID_003 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_03$param$n.marker,
                                n_marker_test = out_03$param$n.marker.test, p_value = out_03$p.value)
             skat_001 <- tibble(SetID_001 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_01$param$n.marker,
                                n_marker_test = out_01$param$n.marker.test, p_value = out_01$p.value)
           }else{
-            resample_p_05 <- Get_Resampling_Pvalue(out_05)[[1]]
+            # resample_p_05 <- Get_Resampling_Pvalue(out_05)[[1]]
             resample_p_03 <- Get_Resampling_Pvalue(out_03)[[1]]
             resample_p_01 <- Get_Resampling_Pvalue(out_01)[[1]]
             
-            skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker, 
-                               n_marker_test = out_05$param$n.marker.test, 
-                               emprical_pvalue = resample_p_05, p_value = out_05$p.value)
+            # skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker, 
+            #                    n_marker_test = out_05$param$n.marker.test, 
+            #                    emprical_pvalue = resample_p_05, p_value = out_05$p.value)
             skat_003 <- tibble(SetID_003 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_03$param$n.marker, 
                                n_marker_test = out_03$param$n.marker.test, 
                                emprical_pvalue = resample_p_03, p_value = out_03$p.value)
@@ -398,30 +427,46 @@ library_load <- function(){
                                emprical_pvalue = resample_p_01, p_value = out_01$p.value)
           }
           
-          result <- bind_cols(skat_001, skat_003, skat_005)
+          result <- bind_cols(skat_003, skat_001)
           return(result)
           
         })
       
       stopCluster(cl)
       
-      results <- SKAT_result %>% bind_rows()
-      
-      fwrite(x = results, file = paste0(data_name,"_result_cov_all_", add_name,".txt"), col.names = T, row.names = F, sep = "\t")
       file.remove(list.files()[!str_detect(list.files(), pattern = "cov|MAC|SetID")])
+      
       Close_SSD()
+      SKAT_result %>% bind_rows() %>% return()
       
     } else {
-      Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
-                         File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
-                         File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                         File.SetID = paste0(data_name,"_skat_gene.SetID"), 
-                         File.SSD = paste0(data_name,"_gene.SSD"), 
-                         File.Info = paste0(data_name,"_gene.INFO"))
-      
-      
-      FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                                File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+      if(data_name == "IPDGC"){
+        Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                             "/",data_name,"_", set_IPDGC, ".bed"),
+                           File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                             "/",data_name,"_", set_IPDGC, ".bim"), 
+                           File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                             "/",data_name,"_", set_IPDGC, ".fam"),
+                           File.SetID = paste0(data_name,"_skat_gene.SetID"), 
+                           File.SSD = paste0(data_name,"_gene.SSD"), 
+                           File.Info = paste0(data_name,"_gene.INFO"))
+        
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                    "/",data_name,"_", set_IPDGC, ".fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                    "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+      } else {
+        
+        Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
+                           File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
+                           File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                           File.SetID = paste0(data_name,"_skat_gene.SetID"), 
+                           File.SSD = paste0(data_name,"_gene.SSD"), 
+                           File.Info = paste0(data_name,"_gene.INFO"))
+        
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+      }
       SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
       
       if(data_name == "IPDGC"){
@@ -441,31 +486,39 @@ library_load <- function(){
       
       SKAT_result <- 
         parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
-          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = F)
+          if(data_name == "IPDGC"){
+            FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                        "/",data_name,"_", set_IPDGC, ".fam"),
+                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                        "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+          } else {
+            FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+          }
+          
           SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
           
           Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T);Z[Z==9] <- NA
           
-          out_05 <- SKAT(Z, obj = obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.05, estimate_MAF = 2) 
+          # out_05 <- SKAT(Z, obj = obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.05, estimate_MAF = 2) 
           out_03 <- SKAT(Z, obj = obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.03, estimate_MAF = 2)
           out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.01, estimate_MAF = 2)
           
           if(re == 0){
-            skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker,
-                               n_marker_test = out_05$param$n.marker.test, p_value = out_05$p.value)
+            # skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker,
+            #                    n_marker_test = out_05$param$n.marker.test, p_value = out_05$p.value)
             skat_003 <- tibble(SetID_003 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_03$param$n.marker,
                                n_marker_test = out_03$param$n.marker.test, p_value = out_03$p.value)
             skat_001 <- tibble(SetID_001 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_01$param$n.marker,
                                n_marker_test = out_01$param$n.marker.test, p_value = out_01$p.value)
           }else{
-            resample_p_05 <- Get_Resampling_Pvalue(out_05)[[1]]
+            # resample_p_05 <- Get_Resampling_Pvalue(out_05)[[1]]
             resample_p_03 <- Get_Resampling_Pvalue(out_03)[[1]]
             resample_p_01 <- Get_Resampling_Pvalue(out_01)[[1]]
             
-            skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker, 
-                               n_marker_test = out_05$param$n.marker.test, 
-                               emprical_pvalue = resample_p_05, p_value = out_05$p.value)
+            # skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker, 
+            #                    n_marker_test = out_05$param$n.marker.test, 
+            #                    emprical_pvalue = resample_p_05, p_value = out_05$p.value)
             skat_003 <- tibble(SetID_003 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_03$param$n.marker, 
                                n_marker_test = out_03$param$n.marker.test, 
                                emprical_pvalue = resample_p_03, p_value = out_03$p.value)
@@ -475,7 +528,7 @@ library_load <- function(){
           }
           
           
-          result <- bind_cols(skat_001, skat_003, skat_005)
+          result <- bind_cols(skat_003, skat_001)
           return(bind_rows(result))
           
         })
@@ -483,10 +536,10 @@ library_load <- function(){
       
       stopCluster(cl)
       
-      SKAT_result %>% bind_rows() %>% 
-        fwrite(file = paste0(data_name,"_result_cov_all_gene_",add_name,".txt"), col.names = T, row.names = F, sep = "\t")
       file.remove(list.files()[!str_detect(list.files(), pattern = "cov|MAC|SetID")])
       Close_SSD()
+      
+      SKAT_result %>% bind_rows() %>% return()
     }
     
   }
@@ -542,7 +595,33 @@ library_load <- function(){
     file.remove(list.files()[!str_detect(list.files(), pattern = "cov|MAC|SetID")])
     Close_SSD()
   }
-
+  p_adjuste_cal <- function(table){
+    p1 <- seq(1, 4, 1)
+    p2 <- seq(5, 8, 1)
+    # p3 <- seq(5, 8, 1)
+    
+    unex_003 <- table %>% select(`p1`) %>% 
+      filter(!str_detect(SetID_003, "-"), !str_detect(SetID_003, "lof")) %>% 
+      mutate(Bonferroni_003 = p.adjust(p_value, p.adjust.methods[4]))
+    
+    unex_001 <- table %>% select(`p2`) %>% 
+      filter(!str_detect(SetID_001, "-"), !str_detect(SetID_001, "lof")) %>% 
+      mutate(Bonferroni_001 = p.adjust(p_value1, p.adjust.methods[4]))
+    
+    unex_result <- bind_cols(unex_003, unex_001)
+    
+    ex_003 <- table %>% select(`p1`) %>% 
+      filter(str_detect(SetID_003, "-"), !str_detect(SetID_003, "lof")) %>% 
+      mutate(Bonferroni_003 = p.adjust(p_value, p.adjust.methods[4]))
+    
+    ex_001 <- table %>% select(`p2`) %>% 
+      filter(str_detect(SetID_001, "-"), !str_detect(SetID_001, "lof")) %>% 
+      mutate(Bonferroni_001 = p.adjust(p_value1, p.adjust.methods[4]))
+    
+    ex_result <- bind_cols(ex_003, ex_001)
+    
+    bind_rows(unex_result, ex_result) %>% return()
+  }
 
 # SNP TABLE FUCNTION =============================
 
