@@ -2,7 +2,8 @@
 library_load <- function(){
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(tidyverse);library(parallel)
   library(tidyselect);library(magrittr);library(SKAT);
-  library(progress)
+  library(progress);
+  library(RMySQL)
   
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
@@ -11,35 +12,33 @@ library_load <- function(){
 # SKAT-O FUNCTION ====================
   # cov make 
   cov_make_not_run <- function(name){
-  # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{name} --indep-pairwise 50 5 0.2 --out skat_pruning", name = name))
-  # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{name} --genome full --out skatQC_IBD", name = name))
-  # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{name} --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out {name}_MDS",
-  #             name = name))
-  # name <- "set3"
-  
-  system(glue("plink --bfile IPDGC_{name} --indep-pairwise 50 5 0.2 --out skat_pruning", name = name))
-  system(glue("plink --bfile IPDGC_{name} --genome full --out skatQC_IBD", name = name))
-  system(glue("plink --bfile IPDGC_{name} --read-genome skatQC_IBD.genome --extract skat_pruning.prune.in --mds-plot 20 --cluster --out {name}_MDS",
-              name = name))
-  system(glue("plink --bfile IPDGC_{name} --missing --out IPDGC_F_MISS", name = name))
+
+  mds <- fread(file = "WES_extracted.mds", header = T)
   
   
-  ###
+  #
+  mds <- fread(file = "WES_MDS.mds", header = T) %>% 
+    select(-IID) %>% 
+    mutate(IID = FID)
   
-  
-  mds <- fread(file = paste0(name,"_MDS.mds"), header = T) %>% select(., -SOL)
   age_control <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/skat_cov/IPDGC_control_phenotype.txt"), select = c(2,7)) %>%
     select(., IID = SUBJECT_ID, AGE = Age)
   age_case <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/skat_cov/IPDGC_case_phenotype.txt"), select = c(2,7)) %>%
     select(., IID = SUBJECT_ID, AGE = Age)
-  age <- bind_rows(age_case, age_control)
+  age <- bind_rows(age_case, age_control) %>% 
+    mutate(FID = IID)
   
   
-  Fmiss <- fread(file = "IPDGC_F_MISS.imiss") %>% select(IID, F_MISS)
-  cov <- left_join(x = mds, y = age, by = "IID") %>% 
-    left_join(x = ., y = Fmiss, by = "IID")
+  Fmiss <- fread("WES.imiss") %>% as_tibble() %>% 
+    select(FID, IID, F_MISS)
+    
   
-  fwrite(x = cov, file = paste0("IPDGC_",name,".cov"), row.names = F, sep = "\t")
+  cov <- left_join(x = mds, y = age, by = c("FID","IID")) %>% 
+    left_join(y = ., x = Fmiss, by = c("FID","IID")) %>% 
+    as_tibble() %>% 
+    select(-SOL)
+  
+  fwrite(x = cov, file = "WES_4.cov", row.names = F, sep = "\t")
 }
   
   # function 
@@ -52,7 +51,7 @@ library_load <- function(){
     #                        sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble() 
     
     # 92 gene_SLC25A4 remove
-    geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/1 gene sets 190428_exclude_ARX_for SKAT_O_SLC25A4_remove.txt", header = T, 
+    geneset_merge <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/1 gene sets 190428_exclude_ARX_for SKAT_O_SLC25A4_remove.txt", header = T, 
                            sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
     
     one_hot <- lapply(X=select(geneset_merge, -HGNC, -M2, -'M2-GBA-LRRK2', -'M2_Brain_gene', -'M2_NOT_brain'), 
@@ -78,15 +77,15 @@ library_load <- function(){
     
     # CHD, DEG adding
     
-    CHD <- fread(file = "/home/jinoo/skat-o/SKAT_data/CHD_0424.txt", header = T, 
+    CHD <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/CHD_0424.txt", header = T, 
                  sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
     CHD[CHD == "05-Mar"] <- "MARCH5" #### 0718 HGNC comfirm
     
     CHD <- CHD %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.)), CHD = NA))
     geneset_onehot <- bind_cols(geneset_onehot, CHD)
     
-    DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/DEG_geneset.txt", header = T, sep = "\t", stringsAsFactors = F, data.table = F)
-    meta_DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/$Table 3 and 4. result_down_intersect_190520_0603.txt", header = T, data.table = F)
+    DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/DEG_geneset.txt", header = T, sep = "\t", stringsAsFactors = F, data.table = F)
+    meta_DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/$Table 3 and 4. result_down_intersect_190520_0603.txt", header = T, data.table = F)
     
     
     DEG1 <- DEG$DEG1 %>% as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG1) <- "DEG1"
@@ -106,44 +105,32 @@ library_load <- function(){
     
     return(return_list)
   } ## 1 = geneset_list, 2 = col_name
-  fix_load_SKAT <- function(data_name, set_IPDGC){
+  fix_load_SKAT <- function(data_name, set_WES){
     print(paste0(data_name, " fix load!"))
     
-    if(data_name == "IPDGC"){
-      test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
-        as_tibble() %>% select(-CADD13_RawScore, -CADD13_PHRED)
-      
-      # include indel
-      path <- list.files(path = "/home/jinoo/skat-o/SKAT_data/indel_cadd/", full.names = T)
-      indel <- lapply(path, FUN = function(x){
-        temp <- fread(file = x, header = T, sep = "\t", stringsAsFactors = F) %>% 
-          mutate_at(1, funs(as.character(.)))
-      }) %>% bind_rows()
-      
-      indel <- indel %>% rename(CHROM = `#CHROM`, CADD13_RawScore = RawScore,CADD13_PHRED = PHRED)
-      
-      test_fix <- left_join(x = test_fix, y = indel, by = c("CHROM","POS","REF","ALT")) 
-      
+    if(data_name == "WES" | data_name == "WES_isec"){
+      test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
+        as_tibble()
+
       test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
       test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
-      test_fix <- test_fix %>% mutate(ID2 = paste(CHROM, POS, sep = ":"))
+      test_fix <- test_fix %>% mutate(CHROM = as.integer(CHROM))
       
-      test_id <- test_fix$ID;test_ch <- test_fix$CHROM;test_pos <- test_fix$POS
-      for(change in 1:length(test_id)){
-        if(test_id[change] == ""){
-          test_id[change] <- paste0(test_ch[change], ":", test_pos[change])
-        }
-      }
-      test_fix$ID <- test_id
-      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/",set_IPDGC,"/",data_name,"_freq.frq"), header = T) %>%
-        rename(ID = SNP)
+      bim <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/", data_name, ".bim")) %>% 
+        as_tibble() %>% select(ID2 = V2)
       
-      test_fix <- left_join(x = test_fix, y = freq, by = "ID")
+      test_fix <- bind_cols(test_fix, bim)
+
+      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/",data_name,".frq"), header = T) %>%
+        rename(ID2 = SNP) %>% 
+        as_tibble()
+  
+      test_fix <- left_join(x = test_fix, y = freq, by = c("ID2"))
       
       
       
     } else{
-      test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
+      test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/",data_name, "_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
         as_tibble()
       test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(X)", replacement = "23")
       test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
@@ -157,7 +144,7 @@ library_load <- function(){
       }
       test_fix$ID <- test_id
       
-      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,"_freq.frq"), header = T) %>%
+      freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/",data_name,"_freq.frq"), header = T) %>%
         rename(ID = SNP)
       test_fix <- left_join(x = test_fix, y = freq, by = "ID")
       
@@ -209,7 +196,7 @@ library_load <- function(){
       ## Parkinson geneset variant
       for(i in 1:length(geneset)){
         variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset[i] & Func.knownGene == "exonic")),
-                               select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED"))
+                               select = c("CHROM", "POS", "ID2", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED"))
       }
       variant <- bind_rows(variant)
       
@@ -222,7 +209,7 @@ library_load <- function(){
                                                  | ExonicFunc.knownGene ==  "frameshift_block_substitution"
                                                  | ExonicFunc.knownGene ==  "splicing"
       ))
-      nonsynonymous <- subset(nonsynonymous, select = "ID")[,1]
+      nonsynonymous <- subset(nonsynonymous, select = "ID2")[,1]
       
       
       ### 2. CADD > 12.37 variant
@@ -233,19 +220,68 @@ library_load <- function(){
                                          | ExonicFunc.knownGene ==  "frameshift_insertion"
                                          | ExonicFunc.knownGene ==  "frameshift_block_substitution"
                                          | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED >= CADD_score)
-      cadd <- subset(cadd, select = "ID")[,1]
+      cadd <- subset(cadd, select = "ID2")[,1]
+      
+      # ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
+      # lof <- subset(variant, subset = ( ExonicFunc.knownGene == "stopgain"
+      #                                   | ExonicFunc.knownGene ==  "stoploss"
+      #                                   | ExonicFunc.knownGene ==  "frameshift_deletion"
+      #                                   | ExonicFunc.knownGene ==  "frameshift_insertion"
+      #                                   | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+      #                                   | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED >= CADD_score)
+      # 
+      # lof <- subset(lof, select = "ID2")[,1]
+      
+      type <- list(nonsynonymous = nonsynonymous, cadd = cadd)
+      
+      setID <- list()
+      for(j in 1:length(type)){
+        if(nrow(type[[j]]) == 0){
+          next
+        }
+        temp <- data.frame(TYPE=rep(names(type[j]), length(type[[j]])), stringsAsFactors = F)
+        setID[[j]] <- cbind(temp, ID=type[[j]])
+      }
+      setID <- bind_rows(setID)
+      setID$TYPE <- paste0(setID$TYPE, "__",col_name[gene])
+      # system("rm -rf skat.SetID")
+      fwrite(x = setID, file = paste0(data_name, "_skat.SetID"), sep = "\t",row.names = F, quote = F, col.names = F,append = T)
+      pb$tick(1)
+      Sys.sleep(0.01)
+    }
+    
+  } 
+  geneset_setid_synonymous <- function(geneset_merge, col_name, test_fix, data_name, index_, CADD_score){
+    print("geneset SetID making!!")
+    pb <- progress_bar$new(total = length(index_), clear = F)
+    pb$tick(0)
+    Sys.sleep(0.01)
+    
+    for(gene in index_){ # 2:length(col_name), c(2,3,7,16,17)
+      geneset <- geneset_merge[[gene]][!is.na(geneset_merge[[gene]])]
+      variant <- list()
+      ## Parkinson geneset variant
+      for(i in 1:length(geneset)){
+        variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset[i] & Func.knownGene == "exonic")),
+                               select = c("CHROM", "POS", "ID2", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED"))
+      }
+      variant <- bind_rows(variant)
+      
+      ### 1. synonymous geneset 
+      synonymous <- subset(variant, subset = (ExonicFunc.knownGene == "synonymous_SNV"))
+      synonymous <- subset(synonymous, select = "ID2")[,1]
       
       ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
-      lof <- subset(variant, subset = ( ExonicFunc.knownGene == "stopgain"
-                                        | ExonicFunc.knownGene ==  "stoploss"
-                                        | ExonicFunc.knownGene ==  "frameshift_deletion"
-                                        | ExonicFunc.knownGene ==  "frameshift_insertion"
-                                        | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                                        | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED >= CADD_score)
+      cadd_20_less <- subset(variant, subset = ( ExonicFunc.knownGene == "nonsynonymous_SNV"
+                                                 | ExonicFunc.knownGene == "stopgain"
+                                                 | ExonicFunc.knownGene ==  "stoploss"
+                                                 | ExonicFunc.knownGene ==  "frameshift_deletion"
+                                                 | ExonicFunc.knownGene ==  "frameshift_insertion"
+                                                 | ExonicFunc.knownGene ==  "frameshift_block_substitution"
+                                                 | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED < CADD_score)
+      cadd_20_less <- subset(cadd_20_less, select = "ID2")[,1]
       
-      lof <- subset(lof, select = "ID")[,1]
-      
-      type <- list(nonsynonymous = nonsynonymous, cadd = cadd, lof = lof)
+      type <- list(synonymous = synonymous, cadd_20_less = cadd_20_less)
       
       setID <- list()
       for(j in 1:length(type)){
@@ -331,25 +367,33 @@ library_load <- function(){
     }
     
   } # all_gene, column 1 of geneset
-  run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_IPDGC){
+  run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_WES){
     print("SKAT run")
     if(flag == "geneset"){
       
-      if(data_name == "IPDGC"){
-        Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                             "/",data_name,"_", set_IPDGC, ".bed"),
-                           File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                             "/",data_name,"_", set_IPDGC, ".bim"), 
-                           File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                             "/",data_name,"_", set_IPDGC, ".fam"),
+      if(data_name == "WES" | data_name == "WES_isec"){
+        Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                             "/",data_name, ".bed"),
+                           File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                             "/",data_name, ".bim"), 
+                           File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                             "/",data_name, ".fam"),
                            File.SetID = paste0(data_name,"_skat.SetID"), 
                            File.SSD = paste0(data_name,".SSD"), 
                            File.Info = paste0(data_name,".INFO"))  
         
-        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                                    "/",data_name,"_", set_IPDGC, ".fam"),
-                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                                    "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+        if(data_name == "WES"){
+          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                                      "/",data_name, ".fam"),
+                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES,
+                                                      "/",data_name, "_2.cov"), Is.binary = T)
+        } else {
+          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                                      "/",data_name, ".fam"),
+                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES,
+                                                      "/",data_name, ".cov"), Is.binary = T)
+        }
+        
       } else {
       
         Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
@@ -364,67 +408,70 @@ library_load <- function(){
       }
       
       SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
-      if(data_name == "IPDGC"){
-        # obj <-SKAT_Null_Model(Phenotype ~ Sex + AGE + C1 + C2 + C3 + C4 + 
-        #                         F_MISS, data = FAM, out_type="C", Adjustment = F, n.Resampling = re)
-        
+      if(data_name == "WES" | data_name == "WES_isec"){
         # 20 MDS
-        obj <-SKAT_Null_Model(Phenotype ~ Sex + AGE + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
+        obj <-SKAT_Null_Model_MomentAdjust(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
                                 C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
-                                C19 + C20 + F_MISS, data = FAM, out_type="C", Adjustment = F, n.Resampling = re)
+                                C19 + C20, data = FAM, is_kurtosis_adj = T, n.Resampling = re, 
+                              type.Resampling = "bootstrap.fast") 
         
       }else{
         obj <-SKAT_Null_Model(Phenotype ~ Sex + AGE + C1 + C2 + C3 + C4 + F_MISS,
                               data = FAM, out_type="C", Adjustment = F, n.Resampling = re)
+        # obj <- SKAT_Null_Model_MomentAdjust(Phenotype ~ Sex + AGE  + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
+        #                                       C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
+        #                                       C19 + C20 + F_MISS, data = FAM, n.Resampling = 100, is_kurtosis_adj = T)
       }
       # skat run
       {
         cl <- makeCluster(detectCores() - 1)
-        clusterExport(cl, c("obj","data_name","re"), envir=environment())
+        clusterExport(cl, c("obj","data_name","re", "set_WES"), envir=environment())
         clusterEvalQ(cl, {library(SKAT);library(tidyverse);library(data.table)})
       }
-      
+
       SKAT_result <- 
         parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
           
-          if(data_name == "IPDGC"){
-            FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                                        "/",data_name,"_", set_IPDGC, ".fam"),
-                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
-                                                        "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+          if(data_name == "WES" | data_name == "WES_isec"){
+            if(data_name == "WES"){
+              FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                                          "/",data_name, ".fam"),
+                                        File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES,
+                                                          "/",data_name, "_2.cov"), Is.binary = T)
+            } else {
+              FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                                          "/",data_name, ".fam"),
+                                        File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES,
+                                                          "/",data_name, ".cov"), Is.binary = T)
+            }
+            
           } else {
             FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+                                      File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = T)
           }
-          
+
           SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
           
           Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T)
-          out_05 <- SKAT(Z, obj = obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.05)
-          out_03 <- SKAT(Z, obj = obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.03)
-          out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.9, max_maf = 0.01)
+          out_03 <- SKATBinary(Z, obj, method = "optimal.adj", missing_cutoff = 0.2, max_maf = 0.03, method.bin = "UA")
+          out_01 <- SKATBinary(Z, obj, method = "optimal.adj", missing_cutoff = 0.2, max_maf = 0.01, method.bin = "UA")
           
           if(re == 0){
-            # skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker,
-            #                    n_marker_test = out_05$param$n.marker.test, p_value = out_05$p.value)
             skat_003 <- tibble(SetID_003 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_03$param$n.marker,
-                               n_marker_test = out_03$param$n.marker.test, p_value = out_03$p.value)
+                               n_marker_test = out_03$param$n.marker.test, p_value_003 = out_03$p.value)
             skat_001 <- tibble(SetID_001 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_01$param$n.marker,
-                               n_marker_test = out_01$param$n.marker.test, p_value = out_01$p.value)
+                               n_marker_test = out_01$param$n.marker.test, p_value_001 = out_01$p.value)
           }else{
-            # resample_p_05 <- Get_Resampling_Pvalue(out_05)[[1]]
+
             resample_p_03 <- Get_Resampling_Pvalue(out_03)[[1]]
             resample_p_01 <- Get_Resampling_Pvalue(out_01)[[1]]
-            
-            # skat_005 <- tibble(SetID_005 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_05$param$n.marker, 
-            #                    n_marker_test = out_05$param$n.marker.test, 
-            #                    emprical_pvalue = resample_p_05, p_value = out_05$p.value)
+
             skat_003 <- tibble(SetID_003 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_03$param$n.marker, 
-                               n_marker_test = out_03$param$n.marker.test, 
-                               emprical_pvalue = resample_p_03, p_value = out_03$p.value)
+                               n_marker_test = out_03$param$n.marker.test, p_value_003 = out_03$p.value,
+                               p_value_emp003 = resample_p_03)
             skat_001 <- tibble(SetID_001 = SSD.INFO$SetInfo[SET_index,2], n_marker = out_01$param$n.marker, 
-                               n_marker_test = out_01$param$n.marker.test, 
-                               emprical_pvalue = resample_p_01, p_value = out_01$p.value)
+                               n_marker_test = out_01$param$n.marker.test, p_value_001 = out_01$p.value, 
+                               p_value_emp001 = resample_p_01)
           }
           
           result <- bind_cols(skat_003, skat_001)
@@ -544,32 +591,60 @@ library_load <- function(){
     
   }
   
-  MAC_calculation <- function(data_name, add_name){
+  MAC_calculation <- function(data_name, add_name, set_IPDGC){
     print("MAC calculation run")
-    Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
-                       File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
-                       File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                       File.SetID = paste0(data_name,"_skat_gene.SetID"), 
-                       File.SSD = paste0(data_name,"_gene.SSD"), 
-                       File.Info = paste0(data_name,"_gene.INFO"))
     
-    FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                              File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+    if(data_name == "IPDGC"){
+      Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                           "/",data_name,"_", set_IPDGC, ".bed"),
+                         File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                           "/",data_name,"_", set_IPDGC, ".bim"), 
+                         File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                           "/",data_name,"_", set_IPDGC, ".fam"),
+                         File.SetID = paste0(data_name,"_skat_gene.SetID"), 
+                         File.SSD = paste0(data_name,"_gene.SSD"), 
+                         File.Info = paste0(data_name,"_gene.INFO"))
+      
+      FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                  "/",data_name,"_", set_IPDGC, ".fam"),
+                                File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                  "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+    } else {
+      
+      Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bed"),
+                         File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".bim"), 
+                         File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                         File.SetID = paste0(data_name,"_skat_gene.SetID"), 
+                         File.SSD = paste0(data_name,"_gene.SSD"), 
+                         File.Info = paste0(data_name,"_gene.INFO"))
+      
+      FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+    }
     SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
     
+    # skat run
     {
       cl <- makeCluster(detectCores() - 1)
       clusterExport(cl, c("data_name"), envir=environment())
       clusterEvalQ(cl, {library(SKAT);library(tidyverse);library(data.table)})
     }
     
-    MAC_result <- parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
-      
-      FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
-                                File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = F)
-      SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
-      
-      Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T);Z[Z==9] <- NA
+    MAC_result <- 
+      parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
+        if(data_name == "IPDGC"){
+          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                      "/",data_name,"_", set_IPDGC, ".fam"),
+                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/", set_IPDGC, 
+                                                      "/",data_name,"_", set_IPDGC, ".cov"), Is.binary = FALSE )
+        } else {
+          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".fam"),
+                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/",data_name,".cov"), Is.binary = FALSE )
+        }
+        
+        SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
+        
+        Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T);Z[Z==9] <- NA
       
       #### MAC report
       Z_tibble <- as_tibble(Z) %>% select_if(colMeans(., na.rm = T)/2 != 0 & colMeans(., na.rm = T)/2 <= 0.03)
@@ -602,21 +677,21 @@ library_load <- function(){
     
     unex_003 <- table %>% select(`p1`) %>% 
       filter(!str_detect(SetID_003, "-"), !str_detect(SetID_003, "lof")) %>% 
-      mutate(Bonferroni_003 = p.adjust(p_value, p.adjust.methods[4]))
+      mutate(Bonferroni_003 = p.adjust(p_value_003, p.adjust.methods[4]))
     
     unex_001 <- table %>% select(`p2`) %>% 
       filter(!str_detect(SetID_001, "-"), !str_detect(SetID_001, "lof")) %>% 
-      mutate(Bonferroni_001 = p.adjust(p_value1, p.adjust.methods[4]))
+      mutate(Bonferroni_001 = p.adjust(p_value_001, p.adjust.methods[4]))
     
     unex_result <- bind_cols(unex_003, unex_001)
     
     ex_003 <- table %>% select(`p1`) %>% 
       filter(str_detect(SetID_003, "-"), !str_detect(SetID_003, "lof")) %>% 
-      mutate(Bonferroni_003 = p.adjust(p_value, p.adjust.methods[4]))
+      mutate(Bonferroni_003 = p.adjust(p_value_003, p.adjust.methods[4]))
     
     ex_001 <- table %>% select(`p2`) %>% 
       filter(str_detect(SetID_001, "-"), !str_detect(SetID_001, "lof")) %>% 
-      mutate(Bonferroni_001 = p.adjust(p_value1, p.adjust.methods[4]))
+      mutate(Bonferroni_001 = p.adjust(p_value_001, p.adjust.methods[4]))
     
     ex_result <- bind_cols(ex_003, ex_001)
     
@@ -845,6 +920,20 @@ library_load <- function(){
       as_tibble() %>% separate(value, c("info","value"), sep = "=") %>% 
       spread(key = "info", value = "value") %>% return()
   }
+  
+  clinvar_db <- function(host = "210.115.229.64", dbname = "clinvar", 
+                         user = "root", pass = "dblab2316", table_name = "clinvar_SKAT_test_hg19"){
+    driver <- dbDriver("MySQL")
+    con <- dbConnect(drv = driver, host = host, dbname = dbname, 
+                     user = user, pass = pass)
+    # row_data <- dbGetQuery(con, paste0("select * from apriori where pmid IN ", pmid_list))
+    row_data <- tbl(con, table_name) %>% as.data.frame() %>% 
+      select(-row_names)
+    
+    dbDisconnect(con)
+    return(row_data)
+  }
+  
   re_CLNSIG <- function(CHROMPOS, clinvar){
     select(clinvar[which(str_detect(clinvar$CHROMPOS_R_A, paste0("^",CHROMPOS, "$")))[1], ], CLNSIG)[,1] %>%
       return()
@@ -853,6 +942,17 @@ library_load <- function(){
     select(clinvar[which(str_detect(clinvar$CHROMPOS_R_A, paste0("^",CHROMPOS, "$")))[1], ], CLNSIGCONF)[,1] %>%
       return()
   }
+  
+  re_CLINVAR_ID <- function(CHROMPOS, clinvar){
+    select(clinvar[which(str_detect(clinvar$CHROMPOS_R_A, paste0("^",CHROMPOS, "$")))[1], ], ID)[,1] %>%
+      return()
+  }
+  
+  re_CLNHGVS <- function(CHROMPOS, clinvar){
+    select(clinvar[which(str_detect(clinvar$CHROMPOS_R_A, paste0("^",CHROMPOS, "$")))[1], ], CLNHGVS)[,1] %>%
+      return()
+  }
+  
   
   table3_CLSIG <- function(table){
     result <- mclapply(X = unique.default(table$IID), function(target_IID){
@@ -913,7 +1013,7 @@ library_load <- function(){
   }
   
   # result processing
-  snp_table <- function(data_name = "IPDGC", index_, clinvar){
+  snp_table <- function(data_name = "IPDGC", index_, clinvar, set_type){
     core <- detectCores() - 1
     geneset_result <- list()
     geneset <- geneset_load()
@@ -927,10 +1027,10 @@ library_load <- function(){
       # system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/{data_name} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof",
       #             data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
       
-      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/{data_name}_set1 --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn",
-                  data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
-      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/{data_name}_set1 --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof",
-                  data_name = data_name, geneset = geneset[[2]][index]), ignore.stdout = T)
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set{type}/{data_name}_set{type} --extract {data_name}_{geneset}_non-syn.txt --recode A --out test_dosage_nonsyn",
+                  data_name = data_name, geneset = geneset[[2]][index], type = set_type), ignore.stdout = T)
+      system(glue("plink --bfile /home/jinoo/skat-o/SKAT_data/SKAT_set_data/set{type}/{data_name}_set{type} --extract {data_name}_{geneset}_lof.txt --recode A --out test_dosage_lof",
+                  data_name = data_name, geneset = geneset[[2]][index], type = set_type), ignore.stdout = T)
       
       nonsyn_dosage <- fread(file = "test_dosage_nonsyn.raw", header = T) %>% select(-FID, -PAT, -MAT, SEX) %>% as_tibble()
       lof_dosage <- fread(file = "test_dosage_lof.raw", header = T) %>% select(-FID, -PAT, -MAT, SEX) %>% as_tibble()
@@ -1040,7 +1140,10 @@ library_load <- function(){
           anno_data_nonsyn <- filter(fix, ID == str_split(colnames(nonsyn_dosage)[col_len], pattern = "_")[[1]][1]) %>%
             select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>% 
             mutate(Clinical_Significance = re_CLNSIG(paste0(CHROM, ":", POS, REF, ALT), clinvar),
-                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar))},mc.cores = core) %>%
+                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLINVAR_ID = re_CLINVAR_ID(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLNHGVS = re_CLNHGVS(paste0(CHROM, ":", POS, REF, ALT), clinvar)
+            )},mc.cores = core) %>%
           bind_rows()
         
         
@@ -1049,7 +1152,10 @@ library_load <- function(){
           anno_data_lof <- filter(fix, ID == str_split(colnames(lof_dosage)[col_len], pattern = "_")[[1]][1]) %>%
             select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
             mutate(Clinical_Significance = re_CLNSIG(paste0(CHROM, ":", POS, REF, ALT), clinvar),
-                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar))},mc.cores = core) %>% 
+                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLINVAR_ID = re_CLINVAR_ID(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLNHGVS = re_CLNHGVS(paste0(CHROM, ":", POS, REF, ALT), clinvar)
+                   )},mc.cores = core) %>%
           bind_rows()
         
         nonsyn_result <- nonsyn_result %>%
@@ -1081,7 +1187,10 @@ library_load <- function(){
           anno_data_nonsyn <- filter(fix, ID == str_sub(colnames(nonsyn_dosage)[col_len], end = -3)) %>%
             select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
             mutate(Clinical_Significance = re_CLNSIG(paste0(CHROM, ":", POS, REF, ALT), clinvar),
-                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar))},mc.cores = core) %>% 
+                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLINVAR_ID = re_CLINVAR_ID(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLNHGVS = re_CLNHGVS(paste0(CHROM, ":", POS, REF, ALT), clinvar)
+            )},mc.cores = core) %>%
           bind_rows()
         
         
@@ -1090,7 +1199,10 @@ library_load <- function(){
           anno_data_lof <- filter(fix, ID == str_sub(colnames(lof_dosage)[col_len], end = -3)) %>%
             select(., CHROM, POS, ID, REF, ALT, Gene.knownGene, AAChange.knownGene, CADD13_PHRED, MAF) %>%
             mutate(Clinical_Significance = re_CLNSIG(paste0(CHROM, ":", POS, REF, ALT), clinvar),
-                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar))},mc.cores = core) %>% 
+                   CLNSIGCONF = re_CLNSIGCONF(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLINVAR_ID = re_CLINVAR_ID(paste0(CHROM, ":", POS, REF, ALT), clinvar),
+                   CLNHGVS = re_CLNHGVS(paste0(CHROM, ":", POS, REF, ALT), clinvar)
+            )},mc.cores = core) %>%
           bind_rows()
         
         nonsyn_result <- nonsyn_result %>%
@@ -1110,7 +1222,7 @@ library_load <- function(){
     return(geneset_result)
   }
   
-  table3_ver_1 <- function(data_list, type = "Pathogenic", geneset_name, MAF_value = 0.03, CADD_score = 20){
+  table3_ver_1 <- function(data_list, type = "Pathogenic", geneset_name, MAF_value = 0.03, CADD_score = 20, set){
     index <- which(names(data_list) == geneset_name)
     
     temp <- data_list[[index]]
@@ -1172,10 +1284,23 @@ library_load <- function(){
     
     result <- bind_cols(case, control) 
     
-    if(result[1,1] == 0)
-      result[1,1] <- 445 - result[,1] %>% sum
-    if(result[1,2] == 0)
-      result[1,2] <- 333 - result[,2] %>% sum
+    if(set == 1){
+      if(result[1,1] == 0)
+        result[1,1] <- 445 - result[,1] %>% sum
+      if(result[1,2] == 0)
+        result[1,2] <- 333 - result[,2] %>% sum  
+    }else if(set == 2){
+      if(result[1,1] == 0)
+        result[1,1] <- 439 - result[,1] %>% sum
+      if(result[1,2] == 0)
+        result[1,2] <- 330 - result[,2] %>% sum
+    }else if(set == 3){
+      if(result[1,1] == 0)
+        result[1,1] <- 442 - result[,1] %>% sum
+      if(result[1,2] == 0)
+        result[1,2] <- 333 - result[,2] %>% sum
+    }
+    
     
     return(result)
   }
