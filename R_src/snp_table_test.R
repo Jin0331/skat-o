@@ -2,135 +2,119 @@
 rm(list=ls());gc()
 # source("/home/jinoo/skat-o/snp_table.R")
 # source("/home/jinoo/skat-o/R_src/snp_table_0716.R")
-source("/home/jinoo/skat-o/R_src/SKAT_SNPTABLE_F_ver_01.R")
+source("/home/jinoo/skat-o/R_src/SKAT_SNPTABLE_F_ver_05_0917.R")
 
 library_load()
+# clinvar <- clinvar_load()
+clinvar <- clinvar_db()
 clinvar <- clinvar_load()
-geneset <- geneset_load()
+
+geneset <- geneset_load_SKAT()
 
 
 # TABLE 2 ====
-  test_fix <- WES_merge_fix <- fix_load("IPDGC", type = "ROW") # row fix ㅅㅜㅈㅓㅇ
-  test_fix <- WES_QC_fix <- fix_load("IPDGC", type = "QC")
-  test_fix <- NeuroX_QC_fix <- fix_load("NeuroX", type = "ROW")
-  test_fix <- NeuroX_QC_fix <- fix_load("NeuroX", type = "QC")
   geneset <- geneset_load()
-
-
-  # 3 = O2, 6 = PARK, 8 = NONPARK, 22 = CHD
-  {
-    gene <- 8
-    geneset_ <- geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])]
+  # 3 = O2, 6 = PARK, 8 = NONPARK
+  gene <- 3
+  geneset_ <- geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])]
+  
+  # row_all_variants
+  
+  for(data_name in c("WES_merge", "PPMI", "NeuroX")){
     variant <- list()
+    fix <- fix_load(data_name = data_name, type = "ROW")
     
-    
-    # row_all_variants
-    for(i in 1:length(geneset_)){
-      variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset_[i])))
+    for(index in 1:length(geneset_)){
+      variant[[index]] <- subset(fix, subset = ((Gene.knownGene == geneset_[index])))
     }
-    
-    bind_rows(variant) %>% nrow()
-    
-    ## Parkinson geneset variant
-    variant <- list()
-    for(i in 1:length(geneset_)){
-      variant[[i]] <- subset(test_fix, subset = ((Gene.knownGene == geneset_[i] & Func.knownGene == "exonic")),
-                             select = c("CHROM", "POS", "ID", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED","MAF"))
-    }
-    variant <- bind_rows(variant)
-    
-    ### 1. nonsynonymous geneset
-    print(paste(gene, "non-syn", sep = " "))
-    nonsynonymous <- subset(variant, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-                                               | ExonicFunc.knownGene == "stopgain"
-                                               | ExonicFunc.knownGene ==  "stoploss"
-                                               | ExonicFunc.knownGene ==  "frameshift_deletion"
-                                               | ExonicFunc.knownGene ==  "frameshift_insertion"
-                                               | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                                               | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01) %>%
-      nrow() %>% print()
-    
-    
-    # ### 2. CADD > 12.37 variant
-    # print(paste(gene, "cadd", sep = " "))
-    # cadd <- subset(variant, subset = ( ExonicFunc.knownGene == "nonsynonymous_SNV"
-    #                                    | ExonicFunc.knownGene == "stopgain"
-    #                                    | ExonicFunc.knownGene ==  "stoploss"
-    #                                    | ExonicFunc.knownGene ==  "frameshift_deletion"
-    #                                    | ExonicFunc.knownGene ==  "frameshift_insertion"
-    #                                    | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-    #                                    | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED > 12.37) %>%
-    #   nrow() %>% print()
-    
-    ### 3. Lof (stopgain, stoploss, frameshift_deletion, frameshift_insertion, splicing, )
-    print(paste(gene, "lof", sep = " "))
-    
-    lof <- subset(variant, subset = ( ExonicFunc.knownGene == "stopgain"
-                                      | ExonicFunc.knownGene ==  "stoploss"
-                                      | ExonicFunc.knownGene ==  "frameshift_deletion"
-                                      | ExonicFunc.knownGene ==  "frameshift_insertion"
-                                      | ExonicFunc.knownGene ==  "frameshift_block_substitution"
-                                      | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01 & CADD13_PHRED >= 20) %>%
-      nrow() %>% print()
+    bind_rows(variant) %>% nrow() %>% print()
   }
-
+  
+  # WES_merge
+  table2_calc(QC_fix = fix_load("WES_merge", type = "QC"), geneset = geneset_) %>% View()
+  # PPMI
+  table2_calc(QC_fix = fix_load("PPMI", type = "QC"), geneset = geneset_) %>% View()
+  
+  # NeuroX
+  table2_calc(QC_fix = fix_load("NeuroX", type = "QC"), geneset = geneset_) %>% View()
+  
 # TABLE 3 WES all variant, CADD score upload & #CHROM ====
 
-  ipdgc_variant <- snp_table_WES(index_ = c(3,6,8,22), clinvar = clinvar) %>% bind_rows()
-  neuroX_variant <- snp_table_WES(index_ = c(3,6,8,22), clinvar = clinvar, data_name = "NeuroX") %>% bind_rows()
-  fwrite(x = select(ipdgc_variant, -CADD13_PHRED), file = "ipdgc_variant.vcf",sep = "\t", col.names = T, row.names = F)
-  fwrite(x = select(neuroX_variant, -CADD13_PHRED), file = "neuroX_variant.vcf",sep = "\t", col.names = T, row.names = F)
-  system("gzip ipdgc_variant.vcf")
-  system("gzip neuroX_variant.vcf")
+  WES_table <- snp_table_ALL(data_name = "WES_merge", index_ = c(3, 6, 8), clinvar = clinvar)
+  PPMI_table <- snp_table_ALL(data_name = "PPMI", index_ = c(3, 6, 8), clinvar = clinvar)
+  # NeuroX_table <- snp_table_ALL(index = c(3), data_name = "NeuroX", clinvar = clinvar)
   
-  CADD_annotation <- fread(file = "NeuroX_cadd.tsv.gz") %>%
-    rename(CHROM = `#CHROM`, POS = POS, REF = REF, ALT = ALT, CADD13 = RawScore, CADD13_PHRED = PHRED) %>% 
-    # mutate(CHROM = as.character(CHROM)) %>%
-    left_join(x = neuroX_variant, y = ., by = c("CHROM","POS","REF","ALT")) %T>%
-    fwrite(x = ., file = "NeuroX_all_variant.txt", col.names = T, row.names = F, sep = "\t")
+  write_delim(x = bind_rows(WES_table), path = "WES_table_0830.txt", delim = "\t")
+  write_delim(x = bind_rows(PPMI_table), path = "PPMI_table_0830.txt", delim = "\t")
 
 
-# TABLE 3 4 preprocessing per individual ====
-  WES_table <- snp_table_ALL(index_ = c(3,6,8), clinvar = clinvar)
-  NeuroX_table <- snp_table_ALL(index = c(3), data_name = "NeuroX", clinvar = clinvar)
-
-  write_delim(x = bind_rows(WES_table[[2]], WES_table[[3]]), path = "WES_table_0808.txt", delim = "\t")
-
-  # NeuroX_table <- snp_table_ALL(index_ = c(3,6,8), clinvar = clinvar, data_name = "NeuroX")
-  ipdgc_result <- snp_table(data_name = "IPDGC", index_ = c(3,6,8), clinvar = clinvar)
+# TABLE 5 6 preprocessing per individual ====
+  wes_result <- snp_table(data_name = "WES_merge", index_ = c(3,6,8), clinvar = clinvar) 
+  ppmi_result <- snp_table(data_name = "PPMI", index_ = c(3,6,8), clinvar = clinvar) 
 
 # TABLE 5 ====
-  for(geneset_name in c("O2","O2_PARK", "O2_NONPARK")){
-    table3_ver_1(data_list = ipdgc_result, type = "Pathogenic", geneset_name = geneset_name) %>% 
-      bind_cols(., table3_ver_1(data_list = ipdgc_result, type = "LoF", geneset_name = geneset_name)) %>%
-      bind_cols(., table3_ver_1(data_list = ipdgc_result, type = "CADD_MAF", geneset_name = geneset_name, MAF_value = 0.03)) %>%
-      bind_cols(., table3_ver_1(data_list = ipdgc_result, type = "CADD_MAF", geneset_name = geneset_name, MAF_value = 0.01)) %>%
+  
+  for(geneset_name in c("O2", "O2_PARK", "O2_NONPARK")){
+    table3_ver_1(data_list = wes_result, type = "Pathogenic", geneset_name = geneset_name) %>% 
+      bind_cols(., table3_ver_1(data_list = wes_result, type = "LoF", geneset_name = geneset_name)) %>%
+      bind_cols(., table3_ver_1(data_list = wes_result, type = "CADD_MAF", geneset_name = geneset_name, MAF_value = 0.03)) %>%
+      bind_cols(., table3_ver_1(data_list = wes_result, type = "CADD_MAF", geneset_name = geneset_name, MAF_value = 0.01)) %>%
       bind_cols(tibble(rowname = c("0","1","2","3","4","5","6","7","8+")), .) %>% column_to_rownames(., var = "rowname") %>% 
-      write_delim(x = .,path = paste0("table3_result_",geneset_name,".txt"), delim = "\t")
-    
+      write_delim(x = .,path = paste0("table5_result_WES_merge_",geneset_name,".txt"), delim = "\t")
+  }
+  
+  for(geneset_name in c("O2", "O2_PARK", "O2_NONPARK")){
+    table3_ver_1(data_list = ppmi_result, type = "Pathogenic", geneset_name = geneset_name, data_name = "PPMI") %>% 
+      bind_cols(., table3_ver_1(data_list = ppmi_result, type = "LoF", geneset_name = geneset_name, data_name = "PPMI")) %>%
+      bind_cols(., table3_ver_1(data_list = ppmi_result, type = "CADD_MAF", geneset_name = geneset_name, data_name = "PPMI", MAF_value = 0.03)) %>%
+      bind_cols(., table3_ver_1(data_list = ppmi_result, type = "CADD_MAF", geneset_name = geneset_name, data_name = "PPMI", MAF_value = 0.01)) %>%
+      bind_cols(tibble(rowname = c("0","1","2","3","4","5","6","7","8+")), .) %>% column_to_rownames(., var = "rowname") %>% 
+      write_delim(x = .,path = paste0("table5_result_PPMI_",geneset_name,".txt"), delim = "\t")
   }
 
 # TABLE 6 ====
   # sample deleteriou
-  data_name <- "IPDGC"
-  FAM <- SKAT::Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/IPDGC_set1.fam"),
-                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/SKAT_set_data/set1/IPDGC_set1.cov"), Is.binary = FALSE) %>% as_tibble() %>%
+  data_name <- "WES_merge"
+  FAM <- SKAT::Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/set2/WES_merge_0821.fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/set2/WES_merge_0821.cov"), Is.binary = FALSE) %>% as_tibble() %>%
     select(IID, AGE) %>% rename(Subject_ID = IID) %>% mutate(Subject_ID = as.character(Subject_ID))
   
-  for(geneset_name in c("O2", "O2_PARK", "O2_NONPARK")){
-    table3_ver_3_sample(data_list = ipdgc_result, geneset_name = geneset_name) %>% bind_rows() %>%
+  for(geneset_name in c("O2","O2_PARK","O2_NONPARK")){
+    table3_ver_3_sample(data_list = wes_result, geneset_name = geneset_name) %>% bind_rows() %>%
       left_join(x = ., y = FAM, by = "Subject_ID") %>% 
-      write_delim(x =., path = paste0(geneset_name,"_sample_snv_.txt"), delim = "\t")
+      write_delim(x =., path = paste0(geneset_name,"_sample_WES_snv_.txt"), delim = "\t")
   }
   
-  
   ## sample_gene
-  O2_sample <- table3_ver_3_sample_gene(data_list = ipdgc_result, geneset_name = "O2", type = "ALL") %>%
+  O2_sample <- table3_ver_3_sample_gene(data_list = wes_result, geneset_name = "O2", type = "ALL") %>%
     bind_rows()
   O2_sample[is.na(O2_sample)] <- " "
   O2_sample_result <- O2_sample[, 3:ncol(O2_sample)] %>%
       select(sort(current_vars())) %>% bind_cols(O2_sample[, 1:2],.)
-  write_delim(x = O2_sample_result, path = "sample_gene_0724.txt", delim = "\t")
+  write_delim(x = O2_sample_result, path = "WES_sample_O2_gene_0829.txt", delim = "\t")
+  
+  
+  #### PPMI
+  data_name <- "PPMI"
+  FAM <- SKAT::Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/set2/PPMI_0821.fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/set2/PPMI_0821.cov"), Is.binary = FALSE) %>% as_tibble() %>%
+    select(IID, AGE) %>% rename(Subject_ID = IID) %>% mutate(Subject_ID = as.character(Subject_ID))
+  
+  for(geneset_name in c("O2","O2_PARK","O2_NONPARK")){
+    table3_ver_3_sample(data_list = ppmi_result, geneset_name = geneset_name) %>% bind_rows() %>%
+      left_join(x = ., y = FAM, by = "Subject_ID") %>% 
+      write_delim(x =., path = paste0(geneset_name,"_sample_PPMI_snv_.txt"), delim = "\t")
+  }
+  
+  ## sample_gene
+  O2_sample <- table3_ver_3_sample_gene(data_list = ppmi_result, geneset_name = "O2", type = "ALL") %>%
+    bind_rows()
+  O2_sample[is.na(O2_sample)] <- " "
+  O2_sample_result <- O2_sample[, 3:ncol(O2_sample)] %>%
+    select(sort(current_vars())) %>% bind_cols(O2_sample[, 1:2],.)
+  write_delim(x = O2_sample_result, path = "PPMI_sample_O2_gene_0829.txt", delim = "\t")
+  
+  
   
 # NOT RUN ====
   ## gene
