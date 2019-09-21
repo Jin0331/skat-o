@@ -119,7 +119,7 @@ geneset_load_SKAT <- function(){
 fix_load_SKAT <- function(data_name, set_WES = "set2"){
   print(paste0(data_name, " fix load!"))
   
-  if(data_name == "WES_merge" | data_name == "WES_isec" | data_name == "PPMI"){
+  if(data_name == "WES_merge" | data_name == "PPMI"){
     test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/",data_name,"_0823_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
       as_tibble() %>% select(-CADD13_RawScore, -CADD13_PHRED) %>% 
       rename(CADD13_RawScore = RawScore, CADD13_PHRED = PHRED)
@@ -132,6 +132,11 @@ fix_load_SKAT <- function(data_name, set_WES = "set2"){
       as_tibble() %>% select(ID2 = V2)
     
     test_fix <- bind_cols(test_fix, bim)
+    
+    bim2 <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/", data_name, "_0821.bim")) %>% 
+      as_tibble() %>% select(ID2 = V2)
+    
+    test_fix <- left_join(x = bim2, y = test_fix, by = "ID2")
     
     freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/",data_name,"_0821.frq"), header = T) %>%
       rename(ID2 = SNP) %>% 
@@ -151,6 +156,11 @@ fix_load_SKAT <- function(data_name, set_WES = "set2"){
       as_tibble() %>% select(ID2 = V2)
     
     test_fix <- bind_cols(test_fix, bim)
+    
+    bim2 <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/", data_name, "_0821.bim")) %>% 
+      as_tibble() %>% select(ID2 = V2)
+    
+    test_fix <- left_join(x = bim2, y = test_fix, by = "ID2")
     
     freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/", data_name, "_0821.frq")) %>%
       rename(ID2 = SNP) %>% 
@@ -226,7 +236,7 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, 
                                                | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED < CADD_score)
     cadd_20_less <- subset(cadd_20_less, select = "ID2")[,1]
     
- 
+    
     
     ### nonsynonymous geneset
     nonsynonymous <- subset(variant, subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
@@ -350,18 +360,18 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
       if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
         FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
                                   File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
-      }}
+      }
       
-    } else { stop("wrong data_name : choosing 'WES_merge', 'WES_isec', 'PPMI', 'NeuroX'")  }
+    } else { stop("wrong data_name : choosing 'WES_merge', 'PPMI', 'NeuroX'")  }
     
     SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
+    
     if(data_name == "WES_merge" | data_name == "PPMI"){
-      if(data_name == "WES_merge" | data_name == "PPMI"){
-        obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
-                                 C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
-                                 C19 + C20, data = FAM, n.Resampling = re)
-        
-      } else if(data_name == "NeuroX") { # NeuroX 
+      obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
+                               C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
+                               C19 + C20, data = FAM, n.Resampling = re)
+      
+    } else if(data_name == "NeuroX") { # NeuroX 
       obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4, data = FAM, n.Resampling = re)
     }
     
@@ -386,12 +396,12 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
         
         Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T)
         
-        if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
+        if(data_name == "WES_merge" | data_name == "PPMI"){
           out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.01)
           out_03 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.03)
         } else {
-          out_03 <- SKATBinary(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.03, method.bin = "UA")
-          out_01 <- SKATBinary(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.01, method.bin = "UA")
+          out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.05, max_maf = 0.01)
+          out_03 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.05, max_maf = 0.03)
         }
         
         # output
@@ -426,7 +436,7 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
     SKAT_result %>% bind_rows() %>% return()
     
   } else if(flag == "gene") {
-    if(data_name == "WES_merge" | data_name == "WES_isec" | data_name == "PPMI" | data_name == "NeuroX"){
+    if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
       Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.bed"),
                          File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.bim"), 
                          File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
@@ -434,28 +444,19 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
                          File.SSD = paste0(data_name,"_gene.SSD"), 
                          File.Info = paste0(data_name,"_gene.INFO"))
       
-      if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
-        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
-                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
-      } else {
-        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
-                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = T)
-      }
-    } else { stop("wrong data_name : choosing 'WES_merge', 'WES_isec', 'PPMI', 'NeuroX'")  }
+      
+      FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
+                                File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
+      
+    } else { stop("wrong data_name : choosing 'WES_merge', 'PPMI', 'NeuroX'")  }
     
     SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
     
-    if(data_name == "WES_merge" | data_name == "WES_isec" | data_name == "PPMI" | data_name == "NeuroX"){
-      if(data_name == "WES_merge" | data_name == "PPMI"){
-        obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
-                                 C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
-                                 C19 + C20, data = FAM, n.Resampling = re)
-      } else {
-        obj <-SKAT_Null_Model_MomentAdjust(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
-                                             C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
-                                             C19 + C20, data = FAM, is_kurtosis_adj = T, n.Resampling = re,
-                                           type.Resampling = "bootstrap.fast")
-      }
+    
+    if(data_name == "WES_merge" | data_name == "PPMI"){
+      obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
+                               C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
+                               C19 + C20, data = FAM, n.Resampling = re)
     } else if(data_name == "NeuroX") { # NeuroX 
       obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4, data = FAM, n.Resampling = re)
     }
@@ -470,25 +471,22 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
     
     SKAT_result <- 
       parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
-
+        
         if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
           FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
                                     File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
-        } else {
-          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
-                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = T)
-        }
+        } 
         
         SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,"_gene.SSD"), File.Info = paste0(data_name,"_gene.INFO"))
         
         Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T)
         
         if(data_name == "WES_merge" | data_name == "PPMI"){
-          out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.2, max_maf = 0.01)
-          out_03 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.2, max_maf = 0.03)
+          out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.01)
+          out_03 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.03)
         } else {
-          out_03 <- SKATBinary(Z, obj, method = "optimal.adj", missing_cutoff = 0.2, max_maf = 0.03, method.bin = "UA")
-          out_01 <- SKATBinary(Z, obj, method = "optimal.adj", missing_cutoff = 0.2, max_maf = 0.01, method.bin = "UA")
+          out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.05, max_maf = 0.01)
+          out_03 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.05, max_maf = 0.03)
         }
         
         
@@ -665,7 +663,7 @@ fix_load <- function(data_name, type = "QC", set_WES = "set2"){
     return(test_fix)
   }
   
-  else if((data_name == "WES_merge" | data_name == "WES_isec" | data_name == "PPMI") & type != "ROW"){
+  else if((data_name == "WES_merge" | data_name == "PPMI") & type != "ROW"){
     test_fix <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/",data_name,"_0823_fix.txt"), sep = "\t", header = T, stringsAsFactors = F, data.table = F) %>% 
       as_tibble() %>% select(-CADD13_RawScore, -CADD13_PHRED) %>% 
       rename(CADD13_RawScore = RawScore, CADD13_PHRED = PHRED)
@@ -674,10 +672,15 @@ fix_load <- function(data_name, type = "QC", set_WES = "set2"){
     test_fix$CHROM <- gsub(x = test_fix$CHROM, pattern = "(Y)", replacement = "24")
     test_fix <- test_fix %>% mutate(CHROM = as.integer(CHROM)) %>% arrange(CHROM, POS)
     
-    bim <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/", data_name, "_0821.bim")) %>% 
+    bim <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/", data_name, "_0821.bim")) %>% 
       as_tibble() %>% select(ID2 = V2)
     
     test_fix <- bind_cols(test_fix, bim)
+    
+    bim2 <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/", data_name, "_0821.bim")) %>% 
+      as_tibble() %>% select(ID2 = V2)
+    
+    test_fix <- left_join(x = bim2, y = test_fix, by = "ID2")
     
     freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/",data_name,"_0821.frq"), header = T) %>%
       rename(ID2 = SNP) %>% 
@@ -698,6 +701,11 @@ fix_load <- function(data_name, type = "QC", set_WES = "set2"){
       as_tibble() %>% select(ID2 = V2)
     
     test_fix <- bind_cols(test_fix, bim)
+    
+    bim2 <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/", data_name, "_0821.bim")) %>% 
+      as_tibble() %>% select(ID2 = V2)
+    
+    test_fix <- left_join(x = bim2, y = test_fix, by = "ID2")
     
     freq <- fread(file = paste0("/home/jinoo/skat-o/SKAT_data/",set_WES,"/", data_name, "_0821.frq")) %>%
       rename(ID2 = SNP) %>% 
@@ -763,9 +771,7 @@ clinvar_info <- function(temp){
     as_tibble() %>% separate(value, c("info","value"), sep = "=") %>% 
     spread(key = "info", value = "value") %>% return()
 }
-clinvar_db <- function(host = "210.115.229.64", dbname = "clinvar", 
-
-                                              user = "root", pass = "dblab2316", table_name = "clinvar_SKAT_test_hg19"){
+clinvar_db <- function(host = "210.115.229.64", dbname = "clinvar", user = "root", pass = "dblab2316", table_name = "clinvar_190508"){
   driver <- dbDriver("MySQL")
   con <- dbConnect(drv = driver, host = host, dbname = dbname, 
                    user = user, pass = pass)
@@ -778,72 +784,111 @@ clinvar_db <- function(host = "210.115.229.64", dbname = "clinvar",
 }
 # result processing
 table2_calc <- function(QC_fix, geneset){
-  all_variant_post_QC <- list()
+  all_variant_post_QC <- QC_fix %>% nrow()
   
-  # all_variant QC result & All variants located in Hered_PDism genes
-  for(i in 1:length(geneset_)){
-    all_variant_post_QC[[i]] <- subset(QC_fix, subset = ((Gene.knownGene == geneset_[i])))
-  }
+  # all variants located on exons
+  all_variants_located_exon <- QC_fix %>% filter(Func.knownGene == "exonic") %>% nrow()
   
-  all_variant_post_QC_nrow <- all_variant_post_QC %>% bind_rows() %>% nrow()
-  
-  variants_exon <- list()
+  # located_on_gene
+  gene_variants_exon <- QC_fix %>% filter(Func.knownGene == "exonic")
+  variant_exon <- list()
   # variants located on exons
+  
   for(i in 1:length(geneset_)){
-    variants_exon[[i]] <- subset(QC_fix, subset = ((Gene.knownGene == geneset_[i] & Func.knownGene == "exonic")),
+    variants_exon[[i]] <- subset(gene_variants_exon, subset = ((Gene.knownGene == geneset_[i])),
                                  select = c("CHROM", "POS", "ID2", "REF","ALT", "Gene.knownGene","ExonicFunc.knownGene","CADD13_PHRED","MAF"))
   }
   
-  exone_nrow <- variants_exon %>% bind_rows() %>% nrow() 
+  gene_nrow <- variants_exon %>% bind_rows() %>% nrow() 
   
   lof_nonsyn_nrow <- variants_exon %>% bind_rows() %>% 
     subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-                              | ExonicFunc.knownGene == "stopgain"
-                              | ExonicFunc.knownGene ==  "stoploss"
-                              | ExonicFunc.knownGene ==  "frameshift_deletion"
-                              | ExonicFunc.knownGene ==  "frameshift_insertion"
-                              | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
-                              | ExonicFunc.knownGene ==  "splicing")) %>% 
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing")) %>% 
     nrow()
   
   lof_nonsyn_nrow_003 <- variants_exon %>% bind_rows() %>% 
     subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-                              | ExonicFunc.knownGene == "stopgain"
-                              | ExonicFunc.knownGene ==  "stoploss"
-                              | ExonicFunc.knownGene ==  "frameshift_deletion"
-                              | ExonicFunc.knownGene ==  "frameshift_insertion"
-                              | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
-                              | ExonicFunc.knownGene ==  "splicing") & MAF < 0.03) %>% 
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF < 0.03) %>% 
+    nrow()
+  
+  lof_nonsyn_nrow_003_000 <- variants_exon %>% bind_rows() %>% 
+    subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF != 0 &MAF < 0.03) %>% 
     nrow()
   
   lof_nonsyn_nrow_001 <- variants_exon %>% bind_rows() %>% 
     subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-                              | ExonicFunc.knownGene == "stopgain"
-                              | ExonicFunc.knownGene ==  "stoploss"
-                              | ExonicFunc.knownGene ==  "frameshift_deletion"
-                              | ExonicFunc.knownGene ==  "frameshift_insertion"
-                              | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
-                              | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01) %>% 
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01) %>% 
+    nrow()
+  
+  lof_nonsyn_nrow_001_000 <- variants_exon %>% bind_rows() %>% 
+    subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.01) %>% 
     nrow()
   
   lof_nonsyn_nrow_003_cadd_nrow <- variants_exon %>% bind_rows() %>% 
     subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-                              | ExonicFunc.knownGene == "stopgain"
-                              | ExonicFunc.knownGene ==  "stoploss"
-                              | ExonicFunc.knownGene ==  "frameshift_deletion"
-                              | ExonicFunc.knownGene ==  "frameshift_insertion"
-                              | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
-                              | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.03 & CADD13_PHRED >= 20) %>% 
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF < 0.03 & CADD13_PHRED >= 20) %>% 
+    nrow()
+  
+  lof_nonsyn_nrow_003_cadd_nrow_000 <- variants_exon %>% bind_rows() %>% 
+    subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.03 & CADD13_PHRED >= 20) %>% 
     nrow()
   
   lof_nonsyn_nrow_001_cadd_nrow <- variants_exon %>% bind_rows() %>% 
     subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
-                              | ExonicFunc.knownGene == "stopgain"
-                              | ExonicFunc.knownGene ==  "stoploss"
-                              | ExonicFunc.knownGene ==  "frameshift_deletion"
-                              | ExonicFunc.knownGene ==  "frameshift_insertion"
-                              | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
-                              | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.01 & CADD13_PHRED >= 20) %>% 
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01 & CADD13_PHRED >= 20) %>% 
+    nrow()
+  
+  lof_nonsyn_nrow_001_cadd_nrow_000 <- variants_exon %>% bind_rows() %>% 
+    subset(subset = (ExonicFunc.knownGene == "nonsynonymous_SNV"
+                     | ExonicFunc.knownGene == "stopgain"
+                     | ExonicFunc.knownGene ==  "stoploss"
+                     | ExonicFunc.knownGene ==  "frameshift_deletion"
+                     | ExonicFunc.knownGene ==  "frameshift_insertion"
+                     | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+                     | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.01 & CADD13_PHRED >= 20) %>% 
     nrow()
   
   lof_003_cadd_nrow <- variants_exon %>% bind_rows() %>% 
@@ -856,6 +901,16 @@ table2_calc <- function(QC_fix, geneset){
       | ExonicFunc.knownGene ==  "splicing") & MAF < 0.03 & CADD13_PHRED >= 20) %>% 
     nrow()
   
+  lof_003_cadd_nrow_000 <- variants_exon %>% bind_rows() %>% 
+    subset(subset = (
+      ExonicFunc.knownGene == "stopgain"
+      | ExonicFunc.knownGene ==  "stoploss"
+      | ExonicFunc.knownGene ==  "frameshift_deletion"
+      | ExonicFunc.knownGene ==  "frameshift_insertion"
+      | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+      | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.03 & CADD13_PHRED >= 20) %>% 
+    nrow()
+  
   lof_001_cadd_nrow <- variants_exon %>% bind_rows() %>% 
     subset(subset = (
       ExonicFunc.knownGene == "stopgain"
@@ -866,9 +921,21 @@ table2_calc <- function(QC_fix, geneset){
       | ExonicFunc.knownGene ==  "splicing") & MAF < 0.01 & CADD13_PHRED >= 20) %>% 
     nrow()
   
+  lof_001_cadd_nrow_000 <- variants_exon %>% bind_rows() %>% 
+    subset(subset = (
+      ExonicFunc.knownGene == "stopgain"
+      | ExonicFunc.knownGene ==  "stoploss"
+      | ExonicFunc.knownGene ==  "frameshift_deletion"
+      | ExonicFunc.knownGene ==  "frameshift_insertion"
+      | ExonicFunc.knownGene ==  "frameshiftblock_substitution"
+      | ExonicFunc.knownGene ==  "splicing") & MAF != 0 & MAF < 0.01 & CADD13_PHRED >= 20) %>% 
+    nrow()
   
-  return(tibble(all_variant_post_QC_nrow, exone_nrow, lof_nonsyn_nrow, lof_nonsyn_nrow_003, lof_nonsyn_nrow_001,
-                lof_nonsyn_nrow_003_cadd_nrow, lof_nonsyn_nrow_001_cadd_nrow, lof_003_cadd_nrow, lof_001_cadd_nrow))
+  
+  return(tibble(all_variant_post_QC_nrow, all_variants_located_exon, gene_nrow,
+                lof_nonsyn_nrow, lof_nonsyn_nrow_003, lof_nonsyn_nrow_003_000, lof_nonsyn_nrow_001,lof_nonsyn_nrow_001_000,
+                lof_nonsyn_nrow_003_cadd_nrow, lof_nonsyn_nrow_003_cadd_nrow_000, lof_nonsyn_nrow_001_cadd_nrow,lof_nonsyn_nrow_001_cadd_nrow_000, 
+                lof_003_cadd_nrow, lof_003_cadd_nrow_000, lof_001_cadd_nrow, lof_001_cadd_nrow_000))
 }
 
 geneset_extract <- function(geneset_merge, col_name, test_fix, data_name, index_){
