@@ -7,6 +7,10 @@ library_load <- function(){
   
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
+  
+  # power
+  data("SKAT.haplotypes")
+  attach(SKAT.haplotypes)
 }
 
 # SKAT-O FUNCTION ====================
@@ -630,6 +634,31 @@ p_adjuste_cal <- function(table){
   
   bind_rows(unex_result, ex_result) %>% return()
 }
+skat_powerCalc <- function(data_name, region_type = "avg", set_seed = 500){
+  set.seed(set_seed)
+  
+  if(region_type == "avg"){
+    region_length <- 4472  # O2
+  } else region_length <- 411430 # O2
+  
+  result <- switch(data_name,
+                   "WES_merge" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057, 
+                                                Negative.Percent = 50, Case.Prop = 0.56, Causal.MAF.Cutoff = 0.025,
+                                                Causal.Percent = 40, N.Sample.ALL = 764, N.Sim = 1000, alpha = c(0.05, 0.01, 0.001)),
+                   
+                   "PPMI" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057, 
+                                           Negative.Percent = 50, Case.Prop = 0.69, Causal.MAF.Cutoff = 0.03,
+                                           Causal.Percent = 40, N.Sample.ALL = 497, N.Sim = 1000, alpha = c(0.05, 0.01, 0.001)),
+                   
+                   "NeuroX" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS,SubRegion.Length = region_length, Prevalence = 0.0057, 
+                                             Negative.Percent = 50, Case.Prop = 0.48, Causal.MAF.Cutoff = 0.006, 
+                                             Causal.Percent = 52, N.Sample.ALL = 11073, N.Sim = 1000, alpha = c(0.05, 0.01, 0.001)) 
+  )
+  
+  return(result$Power)
+}
+
+
 # power_calc <- function(data_name = "WES", )
 # SNP TABLE FUCNTION =============================
 
