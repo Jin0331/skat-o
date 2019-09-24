@@ -210,7 +210,7 @@ fix_load_SKAT <- function(data_name, set_WES = "set2"){
   
   return(test_fix)
 } # data_name, "IPDGC", "NeuroX"
-geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, CADD_score){
+geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, CADD_score, geneset_type = "ALL"){
   print("geneset SetID making!!")
   pb <- progress_bar$new(total = length(index_), clear = F)
   pb$tick(0)
@@ -264,7 +264,9 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, 
                                        | ExonicFunc.knownGene ==  "splicing") & CADD13_PHRED >= CADD_score)
     cadd <- subset(cadd, select = "ID2")[,1]
     
-    type <- list(Synonymous = synonymous, CADD_20_less = cadd_20_less, CADD_20_more = cadd)
+    
+    if(geneset_type == "ALL") type <- list(Synonymous = synonymous, CADD_20_less = cadd_20_less, CADD_20_more = cadd)
+    else type <- list(CADD_20_more = cadd)
     
     setID <- list()
     for(j in 1:length(type)){
@@ -644,15 +646,15 @@ skat_powerCalc <- function(data_name, region_type = "avg", set_seed = 500){
   result <- switch(data_name,
                    "WES_merge" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057, 
                                                 Negative.Percent = 50, Case.Prop = 0.56, Causal.MAF.Cutoff = 0.025,
-                                                Causal.Percent = 40, N.Sample.ALL = 764, N.Sim = 1000, alpha = c(0.05, 0.01, 0.001)),
+                                                Causal.Percent = 40, N.Sample.ALL = 764, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)),
                    
                    "PPMI" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057, 
                                            Negative.Percent = 50, Case.Prop = 0.69, Causal.MAF.Cutoff = 0.03,
-                                           Causal.Percent = 40, N.Sample.ALL = 497, N.Sim = 1000, alpha = c(0.05, 0.01, 0.001)),
+                                           Causal.Percent = 40, N.Sample.ALL = 497, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)),
                    
                    "NeuroX" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS,SubRegion.Length = region_length, Prevalence = 0.0057, 
                                              Negative.Percent = 50, Case.Prop = 0.48, Causal.MAF.Cutoff = 0.006, 
-                                             Causal.Percent = 52, N.Sample.ALL = 11073, N.Sim = 1000, alpha = c(0.05, 0.01, 0.001)) 
+                                             Causal.Percent = 52, N.Sample.ALL = 11073, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)) 
   )
   
   return(result$Power)

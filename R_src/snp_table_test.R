@@ -1,8 +1,6 @@
 # source & clinvar load ====
 rm(list=ls());gc()
-# source("/home/jinoo/skat-o/snp_table.R")
-# source("/home/jinoo/skat-o/R_src/snp_table_0716.R")
-source("/home/jinoo/skat-o/R_src/SKAT_SNPTABLE_F_ver_05_0917.R")
+source("/home/jinoo/skat-o/R_src/SKAT_SNPTABLE_F_ver_04.R")
 
 library_load()
 # clinvar <- clinvar_load()
@@ -13,9 +11,9 @@ geneset <- geneset_load_SKAT()
 
 
 # TABLE 2 ====
-  geneset <- geneset_load()
+  geneset <- geneset_load_SKAT()
   # 3 = O2, 6 = PARK, 8 = NONPARK
-  gene <- 3
+  gene <- 6
   geneset_ <- geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])]
   
   # row_all_variants
@@ -31,12 +29,11 @@ geneset <- geneset_load_SKAT()
   }
   
   # WES_merge
-  table2_calc(QC_fix = fix_load("WES_merge", type = "QC"), geneset = geneset_) %>% View()
+  table2_WES_merge <- table2_calc(QC_fix = fix_load("WES_merge", type = "QC"), geneset = geneset_)
   # PPMI
-  table2_calc(QC_fix = fix_load("PPMI", type = "QC"), geneset = geneset_) %>% View()
-  
+  table2_PPMI <- table2_calc(QC_fix = fix_load("PPMI", type = "QC"), geneset = geneset_)
   # NeuroX
-  table2_calc(QC_fix = fix_load("NeuroX", type = "QC"), geneset = geneset_) %>% View()
+  table2_NeuroX <- table2_calc(QC_fix = fix_load("NeuroX", type = "QC"), geneset = geneset_)
   
 # TABLE 3 WES all variant, CADD score upload & #CHROM ====
 
