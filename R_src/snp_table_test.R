@@ -1,9 +1,8 @@
 # source & clinvar load ====
 rm(list=ls());gc()
 source("/home/jinoo/skat-o/R_src/SKAT_SNPTABLE_F_ver_04.R")
-
 library_load()
-# clinvar <- clinvar_load()
+
 clinvar <- clinvar_db()
 clinvar <- clinvar_load()
 
@@ -13,7 +12,7 @@ geneset <- geneset_load_SKAT()
 # TABLE 2 ====
   geneset <- geneset_load_SKAT()
   # 3 = O2, 6 = PARK, 8 = NONPARK
-  gene <- 6
+  gene <- 8
   geneset_ <- geneset[[1]][[gene]][!is.na(geneset[[1]][[gene]])]
   
   # row_all_variants
@@ -24,7 +23,7 @@ geneset <- geneset_load_SKAT()
     
     for(index in 1:length(geneset_)){
       variant[[index]] <- subset(fix, subset = ((Gene.knownGene == geneset_[index])))
-    }
+    }Ne
     bind_rows(variant) %>% nrow() %>% print()
   }
   
@@ -41,8 +40,8 @@ geneset <- geneset_load_SKAT()
   PPMI_table <- snp_table_ALL(data_name = "PPMI", index_ = c(3, 6, 8), clinvar = clinvar)
   # NeuroX_table <- snp_table_ALL(index = c(3), data_name = "NeuroX", clinvar = clinvar)
   
-  write_delim(x = bind_rows(WES_table), path = "WES_table_0830.txt", delim = "\t")
-  write_delim(x = bind_rows(PPMI_table), path = "PPMI_table_0830.txt", delim = "\t")
+  write_delim(x = bind_rows(WES_table), path = "WES_table_0920.txt", delim = "\t")
+  write_delim(x = bind_rows(PPMI_table), path = "PPMI_table_1015.txt", delim = "\t")
 
 
 # TABLE 5 6 preprocessing per individual ====
@@ -128,7 +127,7 @@ geneset <- geneset_load_SKAT()
 
 
 
-## SNV SNV
+#### SNV SNV ----
 {
   snv_snv <- bind_rows(WES_table) %>% select(CHROM, POS, ID, REF, ALT, Gene.knownGene, 
                                                 AAChange.knownGene, MAF, Clinical_Significance, geneset, Func, CADD13_PHRED)

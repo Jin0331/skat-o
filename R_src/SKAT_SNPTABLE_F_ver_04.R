@@ -1,10 +1,8 @@
 # library path ====
 library_load <- function(){
   library(glue);library(vcfR);library(data.table);library(foreach);library(doMC);library(tidyverse);library(parallel)
-  library(tidyselect);library(magrittr);library(SKAT);
-  library(progress);
-  library(RMySQL)
-  
+  library(tidyselect);library(magrittr);library(SKAT);library(progress);library(RMySQL)
+  library(MetaSKAT)
   # tool path 
   Sys.setenv(PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/jinoo/tool/:")
   
@@ -79,7 +77,6 @@ geneset_load_SKAT <- function(){
   }
   
   # CHD, DEG adding
-  
   CHD <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/CHD_0424.txt", header = T, 
                sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
   CHD[CHD == "05-Mar"] <- "MARCH5" #### 0718 HGNC comfirm
@@ -87,33 +84,61 @@ geneset_load_SKAT <- function(){
   CHD <- CHD %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.)), CHD = NA))
   geneset_onehot <- bind_cols(geneset_onehot, CHD)
   
-  DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/DEG_geneset.txt", header = T, sep = "\t", stringsAsFactors = F, data.table = F)
-  meta_DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/$Table 3 and 4. result_down_intersect_190520_0603.txt", header = T, data.table = F)
+  # # paper geneset
+  # rev <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/paper_revision.txt", header = F,
+  #              sep = "\t", stringsAsFactors = F, data.table = F) %>% as_tibble()
+  # PLUS <- rev %>% filter(V6 == "yes") %>% pull(1) %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))))
+  # colnames(PLUS) <- "PLUS"
+  # geneset_onehot <- bind_cols(geneset_onehot, PLUS)
+  # 
+  # MINUS <- rev %>% filter(V7 == "yes") %>% pull(1) %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))))
+  # colnames(MINUS) <- "MINUS"
+  # geneset_onehot <- bind_cols(geneset_onehot, MINUS)
+  
+  # DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/DEG_geneset.txt", header = T, sep = "\t", stringsAsFactors = F, data.table = F)
+  # meta_DEG <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/$Table 3 and 4. result_down_intersect_190520_0603.txt", header = T, data.table = F)
+  # 
+  # 
+  # DEG1 <- DEG$DEG1 %>% as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG1) <- "DEG1"
+  # DEG2 <- DEG$DEG1YJK[DEG$DEG1YJK != ""] %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG2) <- "DEG1YJK"
+  # DEG3 <- DEG$DEG1Mito[DEG$DEG1Mito != ""] %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG3) <- "DEG1Mito"
+  # meta_DEG <- meta_DEG$SYMBOL[meta_DEG$SYMBOL != ""] %>% as_tibble() %>%
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(meta_DEG) <- "META_DEG"
   
   
-  DEG1 <- DEG$DEG1 %>% as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG1) <- "DEG1"
-  DEG2 <- DEG$DEG1YJK[DEG$DEG1YJK != ""] %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG2) <- "DEG1YJK"
-  DEG3 <- DEG$DEG1Mito[DEG$DEG1Mito != ""] %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(DEG3) <- "DEG1Mito"
-  meta_DEG <- meta_DEG$SYMBOL[meta_DEG$SYMBOL != ""] %>% as_tibble() %>%
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(meta_DEG) <- "META_DEG"
+  # # NEW geneset adding
+  # New_0827 <- fread("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/new_geneset_0827.txt", sep = "\t")
+  # O2P1 <- New_0827$O2P1[New_0827$O2P1 != ""] %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2P1) <- "O2P1"
+  # O2P2 <- New_0827$O2P2[New_0827$O2P2 != ""] %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2P2) <- "O2P2"
+  # O2P3 <- New_0827$O2P3[New_0827$O2P3 != ""] %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2P3) <- "O2P3"
+  # O2S1 <- New_0827$O2S1[New_0827$O2S1 != ""] %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2S1) <- "O2S1"
   
+  # # New geneset adding - 200525
+  # New_0525 <- fread("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/PARK_interaction_result.csv", sep = ",")
+  # PPI_V1 <- New_0525 %>% filter(total_score >=3) %>% .$`interactor B` %>% unique() %>% 
+  #   as_tibble() %>% bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(PPI_V1) <- "PPI_V1"
+  #   
+  # # New geneset adding - 200525
+  # New_0525 <- fread("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/the SN-meta-DEGs_Phung.txt", sep = "\t")
+  # pung <- New_0525$`HGNC symbol` %>% unique() %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(pung) <- "pung"
+  # 
+  # # New geneset adding - 200604
+  # New_0525 <- fread("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/NONPARK_interaction_result.csv", sep = ",")
+  # PPI_V2 <- New_0525$`interactor B` %>% unique() %>% as_tibble() %>% 
+  #   bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(PPI_V2) <- "PPI_V2"
   
-  # NEW geneset adding
-  New_0827 <- fread("/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/new_geneset_0827.txt", sep = "\t")
-  O2P1 <- New_0827$O2P1[New_0827$O2P1 != ""] %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2P1) <- "O2P1"
-  O2P2 <- New_0827$O2P2[New_0827$O2P2 != ""] %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2P2) <- "O2P2"
-  O2P3 <- New_0827$O2P3[New_0827$O2P3 != ""] %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2P3) <- "O2P3"
-  O2S1 <- New_0827$O2S1[New_0827$O2S1 != ""] %>% as_tibble() %>% 
-    bind_rows(., tibble(.rows = (nrow(geneset_merge) - nrow(.))));colnames(O2S1) <- "O2S1"
-  
-  geneset_onehot <- geneset_onehot %>% bind_cols(., DEG1) %>% bind_cols(., DEG2) %>% bind_cols(., DEG3) %>%
-    bind_cols(., meta_DEG) %>% bind_cols(., O2P1) %>% bind_cols(., O2P2) %>% bind_cols(., O2P3) %>% bind_cols(., O2S1)
-  
+  # geneset_onehot <- geneset_onehot %>% bind_cols(., DEG1) %>% bind_cols(., DEG2) %>% bind_cols(., DEG3) %>%
+  #   bind_cols(., meta_DEG) %>% bind_cols(., O2P1) %>% bind_cols(., O2P2) %>% bind_cols(., O2P3) %>% bind_cols(., O2S1) %>% 
+  #   bind_cols(., PPI_V1) %>% bind_cols(., PPI_V2) %>% bind_cols(., pung)
   
   return_list[[1]] <- geneset_onehot %>% as.list()
   return_list[[2]]<- colnames(geneset_onehot)
@@ -265,16 +290,19 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, 
     cadd <- subset(cadd, select = "ID2")[,1]
     
     
-    if(geneset_type == "ALL") type <- list(Synonymous = synonymous, CADD_20_less = cadd_20_less, CADD_20_more = cadd)
-    else type <- list(CADD_20_more = cadd)
+    if(geneset_type == "ALL") {
+      type <- list(Synonymous = synonymous, CADD_20_less = cadd_20_less, CADD_20_more = cadd)
+    } else {
+      type <- list(CADD_20_more = cadd)
+    }
     
     setID <- list()
-    for(j in 1:length(type)){
-      if(nrow(type[[j]]) == 0){
+    for(index in 1:length(type)){
+      if(nrow(type[[index]]) == 0){
         next
       }
-      temp <- data.frame(TYPE=rep(names(type[j]), length(type[[j]])), stringsAsFactors = F)
-      setID[[j]] <- cbind(temp, ID=type[[j]])
+      temp <- data.frame(TYPE=rep(names(type[index]), length(type[[index]])), stringsAsFactors = F)
+      setID[[index]] <- cbind(temp, ID=type[[index]])
     }
     setID <- bind_rows(setID)
     setID$TYPE <- paste0(setID$TYPE, "__",col_name[gene])
@@ -283,8 +311,8 @@ geneset_setid <- function(geneset_merge, col_name, test_fix, data_name, index_, 
     pb$tick(1)
     Sys.sleep(0.01)
   }
-  
 } 
+
 gene_setid <- function(index = "default_all", geneset, test_fix, data_name, CADD_score){
   print("gene SetID making!!")
   if(is.character(index)){ # if 1, all gene
@@ -348,6 +376,43 @@ gene_setid <- function(index = "default_all", geneset, test_fix, data_name, CADD
   }
   
 } # all_gene, column 1 of geneset
+
+# meta
+make_obj <- function(data_name, flag = "geneset", re = 0, add_name, set_WES = "set2"){
+  if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
+      Generate_SSD_SetID(File.Bed = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                           "/",data_name, "_0821.bed"),
+                         File.Bim = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                           "/",data_name, "_0821.bim"), 
+                         File.Fam = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, 
+                                           "/",data_name, "_0821.fam"),
+                         File.SetID = paste0(data_name,"_skat.SetID"), 
+                         File.SSD = paste0(data_name,".SSD"), 
+                         File.Info = paste0(data_name,".INFO"))  
+      
+    if(data_name == "WES_merge" | data_name == "PPMI"){
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
+    } else if(data_name == "NeuroX"){
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = T)
+    }
+      
+  } else { stop("wrong data_name : choosing 'WES_merge', 'PPMI', 'NeuroX'")  }
+    
+    SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
+    
+    if(data_name == "WES_merge" | data_name == "PPMI"){
+      obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 +
+                               C9 + C10 + C11 + C12 + C13 + C14 + C15 + C16 + C17 + C18 +
+                               C19 + C20, data = FAM, n.Resampling = re)
+      
+    } else if(data_name == "NeuroX") { # NeuroX 
+      obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4, out_type = "D", data = FAM, n.Resampling = re)
+    }
+  return(obj)
+}
+
 run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_WES = "set2"){
   print("SKAT run")
   if(flag == "geneset"){
@@ -363,9 +428,12 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
                          File.SSD = paste0(data_name,".SSD"), 
                          File.Info = paste0(data_name,".INFO"))  
       
-      if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
+      if(data_name == "WES_merge" | data_name == "PPMI"){
         FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
                                   File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
+      } else if(data_name == "NeuroX"){
+        FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
+                                  File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = T)
       }
       
     } else { stop("wrong data_name : choosing 'WES_merge', 'PPMI', 'NeuroX'")  }
@@ -378,7 +446,7 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
                                C19 + C20, data = FAM, n.Resampling = re)
       
     } else if(data_name == "NeuroX") { # NeuroX 
-      obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4, data = FAM, n.Resampling = re)
+      obj <- SKAT_Null_Model(Phenotype ~ Sex + AGE + F_MISS + C1 + C2 + C3 + C4, out_type = "D", data = FAM, n.Resampling = re)
     }
     
     
@@ -392,18 +460,20 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
     SKAT_result <- 
       parLapply(cl = cl, X = 1:nrow(SSD.INFO$SetInfo), fun = function(SET_index){
         
-        if(data_name == "WES_merge" | data_name == "PPMI" | data_name == "NeuroX"){
+        if(data_name == "WES_merge" | data_name == "PPMI"){
           FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
                                     File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = F)
-          
-        } 
+        } else if(data_name == "NeuroX"){
+          FAM <- Read_Plink_FAM_Cov(Filename = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.fam"),
+                                    File_Cov = paste0("/home/jinoo/skat-o/SKAT_data/", set_WES, "/",data_name, "_0821.cov"), Is.binary = T)
+        }
         
         SSD.INFO <- Open_SSD(File.SSD = paste0(data_name,".SSD"), File.Info = paste0(data_name,".INFO"))
         
         Z <- Get_Genotypes_SSD(SSD_INFO = SSD.INFO, SET_index, is_ID = T)
         
         if(data_name == "WES_merge" | data_name == "PPMI"){
-          out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.01)
+              out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.01)
           out_03 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.15, max_maf = 0.03)
         } else {
           out_01 <- SKAT(Z, obj, method = "optimal.adj", missing_cutoff = 0.05, max_maf = 0.01)
@@ -644,17 +714,22 @@ skat_powerCalc <- function(data_name, region_type = "avg", set_seed = 500){
   } else region_length <- 411430 # O2
   
   result <- switch(data_name,
-                   "WES_merge" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057, 
+                   "WES_merge" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057,
                                                 Negative.Percent = 50, Case.Prop = 0.56, Causal.MAF.Cutoff = 0.025,
                                                 Causal.Percent = 40, N.Sample.ALL = 764, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)),
-                   
-                   "PPMI" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057, 
+
+                   "PPMI" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS, SubRegion.Length = region_length, Prevalence = 0.0057,
                                            Negative.Percent = 50, Case.Prop = 0.69, Causal.MAF.Cutoff = 0.03,
                                            Causal.Percent = 40, N.Sample.ALL = 497, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)),
+
                    
                    "NeuroX" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS,SubRegion.Length = region_length, Prevalence = 0.0057, 
                                              Negative.Percent = 50, Case.Prop = 0.48, Causal.MAF.Cutoff = 0.006, 
-                                             Causal.Percent = 52, N.Sample.ALL = 11073, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)) 
+                                             Causal.Percent = 52, N.Sample.ALL = 10859, N.Sim = 100, alpha = c(0.05, 0.01, 0.001))
+                   
+  #                  "NeuroX" = Power_Logistic(Haplotype, SNPInfo$CHROM_POS,SubRegion.Length = region_length, Prevalence = 0.0057, 
+  #                                            Negative.Percent = 50, Case.Prop = 0.48, Causal.MAF.Cutoff = 0.006, 
+  #                                            Causal.Percent = 52, N.Sample.ALL = 10859, N.Sim = 100, alpha = c(0.05, 0.01, 0.001)) 
   )
   
   return(result$Power)
@@ -786,7 +861,7 @@ fix_load <- function(data_name, type = "QC", set_WES = "set2"){
 
 clinvar_load <- function(){
   # clinvar preprocessing
-  clinvar <- fread(file = "/home/jinoo/skat-o/SKAT_data/clinvar_20190506.vcf", header = T) %>%
+  clinvar <- fread(file = "/home/jinoo/skat-o/SKAT_data/geneset_fix_clinvar/clinvar_20190506.vcf", header = T) %>%
     mutate(., CHROM = str_replace(string = CHROM, pattern = "X", replacement = "23")) %>%
     mutate(., CHROM = str_replace(string = CHROM, pattern = "Y", replacement = "24")) %>%
     mutate(., CHROM = str_replace(string = CHROM, pattern = "MT", replacement = "26")) %>%
@@ -822,7 +897,7 @@ table2_calc <- function(QC_fix, geneset){
   
   # located_on_gene
   gene_variants_exon <- QC_fix %>% filter(Func.knownGene == "exonic")
-  variant_exon <- list()
+  variants_exon <- list()
   # variants located on exons
   
   for(i in 1:length(geneset_)){
@@ -963,7 +1038,7 @@ table2_calc <- function(QC_fix, geneset){
     nrow()
   
   
-  return(tibble(all_variant_post_QC_nrow, all_variants_located_exon, gene_nrow,
+  return(tibble(all_variant_post_QC, all_variants_located_exon, gene_nrow,
                 lof_nonsyn_nrow, lof_nonsyn_nrow_003, lof_nonsyn_nrow_003_000, lof_nonsyn_nrow_001,lof_nonsyn_nrow_001_000,
                 lof_nonsyn_nrow_003_cadd_nrow, lof_nonsyn_nrow_003_cadd_nrow_000, lof_nonsyn_nrow_001_cadd_nrow,lof_nonsyn_nrow_001_cadd_nrow_000, 
                 lof_003_cadd_nrow, lof_003_cadd_nrow_000, lof_001_cadd_nrow, lof_001_cadd_nrow_000))
@@ -1930,3 +2005,4 @@ geneset_setid_synonymous_not_run <- function(geneset_merge, col_name, test_fix, 
     return(result)
   }  
 }
+
