@@ -72,10 +72,15 @@ geneset_load_GO_SKAT_REF <- function(dup = FALSE){
   
   return_list <- list()
   return_list[[1]] <- lapply(X = 1:nrow(geneset_merge), FUN = function(row_index){
-    geneset_merge[row_index,] %>% as.character() %>% .[4:length(.)] %>% 
+    temp <- geneset_merge[row_index,] %>% as.character() %>% .[4:length(.)] %>% 
       lapply(X = ., function(x){str_split(string = x, pattern = ";") %>% unlist() %>% .[2]}
-        ) %>% unlist() %>% unique() %>% ifelse(dup == F, .,  setdiff(x = ., all_gene_96)) %>% return()
-  }) 
+        ) %>% unlist() %>% unique()
+    if(dup == FALSE){
+      temp %>% return()
+    } else{
+      setdiff(x = temp, all_gene_96) %>% return()  
+    }
+  })
   
   return_list[[2]] <- paste0(geneset_merge %>% pull(1) %>% 
                                str_remove_all(pattern = "(?![ -~]).") %>% 
@@ -83,11 +88,9 @@ geneset_load_GO_SKAT_REF <- function(dup = FALSE){
                              "(", geneset_merge %>% pull(2), ")")
                             
   return_list[[3]] <- lapply(X = geneset[[1]], function(x){length(x)}) %>% unlist()
+  
   return(return_list)
 } ## 1 = geneset_list, 2 = col_name
-
-
-
 geneset_load_SKAT <- function(){
   print("Geneset load_0428!")
   return_list <- list()
@@ -394,7 +397,6 @@ make_obj <- function(data_name, flag = "geneset", re = 0, add_name, set_WES = "s
     }
   return(obj)
 }
-
 run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_WES = "set2"){
   print("SKAT run")
   if(flag == "geneset"){
@@ -581,7 +583,6 @@ run_skat_all_cov <- function(data_name, flag = "geneset", re = 0, add_name, set_
   }
   
 }
-
 MAC_calculation <- function(data_name, add_name, set_IPDGC){
   print("MAC calculation run")
   
