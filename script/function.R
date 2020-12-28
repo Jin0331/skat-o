@@ -87,7 +87,7 @@ geneset_load_GO_SKAT_REF <- function(dup = FALSE){
                                str_replace_all(pattern = "[:blank:]", replacement = "_"),
                              "(", geneset_merge %>% pull(2), ")")
                             
-  return_list[[3]] <- lapply(X = geneset[[1]], function(x){length(x)}) %>% unlist()
+  return_list[[3]] <- lapply(X = return_list[[1]], function(x){length(x)}) %>% unlist()
   
   return(return_list)
 } ## 1 = geneset_list, 2 = col_name
@@ -125,7 +125,7 @@ geneset_load_SKAT <- function(){
   }
   return_list[[1]] <- geneset_onehot %>% as.list()
   return_list[[2]]<- colnames(geneset_onehot)
-  return_list[[3]] <- lapply(X = geneset[[1]], function(x){length(x)}) %>% unlist()
+  return_list[[3]] <- lapply(X = return_list[[1]], function(x){length(x)}) %>% unlist()
   
   return(return_list)
 } ## 1 = geneset_list, 2 = col_name
@@ -227,6 +227,9 @@ geneset_setid <- function(geneset_merge, col_name, gene_count, test_fix, data_na
   
   for(gene in index_){ # 2:length(col_name), c(2,3,7,16,17)
     geneset <- geneset_merge[[gene]][!is.na(geneset_merge[[gene]])]
+    if(length(geneset) == 0) ## a count of geneset is 0, continue
+      next
+    
     variant <- list()
     ## Parkinson geneset variant
     for(i in 1:length(geneset)){
