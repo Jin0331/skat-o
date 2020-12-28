@@ -7,7 +7,7 @@ library_load()
 
 #load("/home/dblab/skat-o/SKAT_data/geneset_fix_clinvar/geneset_0805.RData")
 #geneset <- geneset_load_SKAT()
-geneset <- geneset_load_GO_SKAT_REF(dup = T)
+geneset <- geneset_load_GO_SKAT_REF(dup = T) # Go term
 
 if(!dir.exists("/home/dblab/skat-o/test")){
   dir.create("/home/dblab/skat-o/test")
@@ -75,6 +75,7 @@ maf_001_idx1 <- MetaSKAT_MSSD_ALL(Cohort.Info, method = "optimal", Group_Idx = c
 write_delim(x = maf_001_idx1, path = "maf_001_idx.txt", delim = "\t", col_names = T)
 
 
+
 # SKAT-O test geneset & per gene =====
 # WES_merge, PPMI, NeuroX
 for(dataset in c("WES_merge","PPMI","NeuroX")){
@@ -112,19 +113,6 @@ for(dataset in c("WES_merge","PPMI","NeuroX")){
     # file.remove(list.files()[str_detect(list.files(), pattern = "SetID|bim|fam|bed")])
   }
 } 
-
-
-
- 
- # data_name <- "IPDGC"
-# data_name <- "NeuroX"
-# 
-# fix <- fix_load_SKAT(data_name = data_name, set_IPDGC = "set1")
-# gene_setid(geneset = geneset, fix, data_name = data_name, index = c(3), CADD_score = cadd_score)
-# MAC_calculation(data_name = data_name, add_name = "0806", set_IPDGC = "set1")
-
-
-
 # power calc ----
 ## pergene
 WES_power <- skat_powerCalc(data_name = "WES_merge", region_type = "avg")
@@ -146,8 +134,4 @@ temp <- mclapply(se_value, function(value){
 
 #temp %>% write_delim(path = "pergene_powercalc.txt", delim = "\t", col_names = T)
 temp %>% bind_rows() %>% write_delim(path = "pergene_powercalc.txt", delim = "\t", col_names = T)
-
-# NOT RUN ====
-# gene_setid(geneset = geneset, fix, data_name = dataset, index = c(3), CADD_score = cadd_score)
-# run_skat_all_cov(data_name = dataset, flag = "per_gene",add_name = as.character(cadd_score))
 # MAC_calculation(data_name = dataset, add_name = "0806")
