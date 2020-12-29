@@ -44,24 +44,30 @@ cov_make_not_run <- function(mds_path){
 
 # function 
 geneset_load_GO_SKAT_client <- function(){
-  print("Geneset load GO geneset!")
+  print("Geneset load GO Client geneset!")
   # 92 gene_SLC25A4 remove
-  geneset_merge <- fread(file = "/home/dblab/skat-o/SKAT_data/geneset_fix_clinvar/Homo_sapiens_Client_gene.txt", header = T, stringsAsFactors = F, data.table = F) %>% as_tibble()
+  geneset_merge <- fread(file = "/home/dblab/skat-o/SKAT_data/geneset_fix_clinvar/Homo sapiens (REF)_gene.txt", 
+                         header = T, stringsAsFactors = F, data.table = F) %>% as_tibble()
+  all_gene_96 <- fread(file = "/home/dblab/skat-o/SKAT_data/geneset_fix_clinvar/all_gene_96.txt", header = F) %>% 
+    as_tibble() %>% pull(1)
   
   return_list <- list()
-  return_list[[1]] <- lapply(X = geneset_merge %>% pull(2), FUN = function(value){
-    geneset_merge %>% filter(GO_Accession == value) %>%
-      select_at(4:length(geneset_merge)) %>% 
-      t() %>% as_tibble() %>% pull(1) %>% unique() %>%  return()
+  return_list[[1]] <- lapply(X = 1:nrow(geneset_merge), FUN = function(row_index){
+    temp <- geneset_merge[row_index,] %>% as.character() %>% .[4:length(.)] %>% 
+      lapply(X = ., function(x){str_split(string = x, pattern = ";") %>% unlist() %>% .[2]}
+      ) %>% unlist() %>% unique()
+    intersect(temp, all_gene_96) %>% return()  
   })
   
-  # return_list[[2]]<- geneset_merge %>% pull(2)
-  return_list[[2]]<- paste0(geneset_merge %>% pull(2), "(",
-                            geneset_merge %>% pull(1) %>% 
-                              str_replace_all(pattern = "[:blank:]", replacement = "_"), ")")
+  return_list[[2]] <- paste0(geneset_merge %>% pull(1) %>% 
+                               str_remove_all(pattern = "(?![ -~]).") %>% 
+                               str_replace_all(pattern = "[:blank:]", replacement = "_"),
+                             "(", geneset_merge %>% pull(2), ")")
   
+  return_list[[3]] <- lapply(X = return_list[[1]], function(x){length(x)}) %>% unlist()
   return(return_list)
-} ## 1 = geneset_list, 2 = col_name
+} 
+
 geneset_load_GO_SKAT_REF <- function(dup = FALSE){
   print("Geneset load GO REF geneset!")
     # 92 gene_SLC25A4 remove
@@ -88,7 +94,6 @@ geneset_load_GO_SKAT_REF <- function(dup = FALSE){
                              "(", geneset_merge %>% pull(2), ")")
                             
   return_list[[3]] <- lapply(X = return_list[[1]], function(x){length(x)}) %>% unlist()
-  
   return(return_list)
 } ## 1 = geneset_list, 2 = col_name
 geneset_load_SKAT <- function(){
@@ -292,7 +297,7 @@ geneset_setid <- function(geneset_merge, col_name, gene_count, test_fix, data_na
       setID[[index]] <- cbind(temp, ID=type[[index]])
     }
     setID <- bind_rows(setID)
-    setID$TYPE <- paste0(setID$TYPE, "_",col_name[gene], "_", gene_count[gene])
+    setID$TYPE <- paste0(setID$TYPE, "__",col_name[gene], "__", gene_count[gene])
     setID <- setID %>% unique()
     # system("rm -rf skat.SetID")
     fwrite(x = setID, file = paste0(data_name, "_skat.SetID"), sep = "\t",row.names = F, quote = F, col.names = F,append = T)
